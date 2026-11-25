@@ -33,13 +33,22 @@ PostgreSQL + Python 기반 오픈소스로 직접 구현하고 AI 에이전트�
 ## 실습 환경
 
 - Python 3.11+ (권장: [uv](https://docs.astral.sh/uv/))
-- PostgreSQL 16+ (Docker Compose 제공 예정)
+- Docker / Docker Compose (PostgreSQL 17 + pgvector)
 - LLM: OpenAI 호환 API (상용 API 또는 로컬 LLM 서버)
 - 임베딩: 임베딩 API (예: bge-m3)
 
 ```bash
-cp .env.example .env   # API 주소·모델 설정
+cp .env.example .env        # API 주소·모델·DB 포트 설정
+docker compose up -d        # PostgreSQL 기동 (최초 1회 Northwind 자동 적재)
+bash scripts/check_db.sh    # 적재 확인
 ```
+
+| 데이터베이스 | 용도 |
+|---|---|
+| `ontology` | 온톨로지 엔진 메타데이터·업무 상태·감사 로그 |
+| `northwind` | Northwind 샘플 데이터 ([datasets/northwind](datasets/northwind/)) |
+
+기본 포트는 `5434`입니다. 이미 사용 중이면 `.env`의 `POSTGRES_PORT`를 바꾸세요.
 
 ## 데이터 안내
 

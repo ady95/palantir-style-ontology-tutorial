@@ -1,0 +1,28 @@
+# 「팔란티어식 온톨로지 따라하기」 실습 인프라
+# 사용법: cp .env.example .env && docker compose up -d
+name: pso
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: pso-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-onto}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-onto}
+      POSTGRES_DB: ${POSTGRES_DB:-ontology}
+      TZ: Asia/Seoul
+    ports:
+      - "${POSTGRES_PORT:-5434}:5432"
+    volumes:
+      - pso-pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/initdb:/docker-entrypoint-initdb.d:ro
+      - ./datasets:/datasets:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pso-pgdata:
