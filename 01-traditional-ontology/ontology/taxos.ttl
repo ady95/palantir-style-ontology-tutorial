@@ -1,0 +1,139 @@
+@prefix tx:   <https://example.org/taxos#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# =====================================================================
+#  세무 사무소 도메인 온톨로지 (TBox)
+#  - 실습용으로 단순화한 모델이며 실제 세법 체계를 표현하지 않는다.
+# =====================================================================
+
+<https://example.org/taxos> a owl:Ontology ;
+    rdfs:label "Tax Office Ontology (실습용)"@ko ;
+    owl:versionInfo "0.1.0" .
+
+# ---------------------------------------------------------------------
+# Class: 고객
+# ---------------------------------------------------------------------
+tx:Customer a owl:Class ; rdfs:label "고객"@ko .
+
+tx:IndividualBusiness a owl:Class ; rdfs:subClassOf tx:Customer ; rdfs:label "개인사업자"@ko .
+tx:Corporation        a owl:Class ; rdfs:subClassOf tx:Customer ; rdfs:label "법인"@ko .
+tx:IndividualBusiness owl:disjointWith tx:Corporation .
+
+tx:GeneralTaxpayer    a owl:Class ; rdfs:subClassOf tx:Customer ; rdfs:label "일반과세자"@ko .
+tx:SimplifiedTaxpayer a owl:Class ; rdfs:subClassOf tx:Customer ; rdfs:label "간이과세자"@ko .
+tx:GeneralTaxpayer owl:disjointWith tx:SimplifiedTaxpayer .
+
+# 공리: 법인은 일반과세자다 (법인은 간이과세자가 될 수 없음)
+tx:Corporation rdfs:subClassOf tx:GeneralTaxpayer .
+
+# ---------------------------------------------------------------------
+# Class: 담당자
+# ---------------------------------------------------------------------
+tx:Accountant    a owl:Class ; rdfs:label "담당자"@ko .
+tx:TaxAccountant a owl:Class ; rdfs:subClassOf tx:Accountant ; rdfs:label "세무사"@ko .
+tx:Staff         a owl:Class ; rdfs:subClassOf tx:Accountant ; rdfs:label "실무자"@ko .
+tx:TaxAccountant owl:disjointWith tx:Staff .
+
+# ---------------------------------------------------------------------
+# Class: 신고·자료·업무·이력
+# ---------------------------------------------------------------------
+tx:TaxReturn          a owl:Class ; rdfs:label "세무 신고"@ko .
+tx:DocumentType       a owl:Class ; rdfs:label "필수 자료 유형"@ko .
+tx:DocumentSubmission a owl:Class ; rdfs:label "자료 제출 현황"@ko .
+tx:Consultation       a owl:Class ; rdfs:label "상담 이력"@ko .
+tx:Task               a owl:Class ; rdfs:label "후속 업무"@ko .
+
+tx:RiskEvent      a owl:Class ; rdfs:label "위험 이벤트"@ko .
+tx:LateFiling     a owl:Class ; rdfs:subClassOf tx:RiskEvent ; rdfs:label "기한후신고"@ko .
+tx:PenaltyTax     a owl:Class ; rdfs:subClassOf tx:RiskEvent ; rdfs:label "가산세부과"@ko .
+tx:NoContact      a owl:Class ; rdfs:subClassOf tx:RiskEvent ; rdfs:label "연락두절"@ko .
+tx:LateSubmission a owl:Class ; rdfs:subClassOf tx:RiskEvent ; rdfs:label "자료지연제출"@ko .
+
+# ---------------------------------------------------------------------
+# 정의 클래스 (추론으로 분류됨)
+# ---------------------------------------------------------------------
+# 기한후신고 이력이 있는 고객
+tx:LateFiler a owl:Class ;
+    rdfs:label "기한후신고 이력 고객"@ko ;
+    owl:equivalentClass [
+        a owl:Class ;
+        owl:intersectionOf ( tx:Customer
+                             [ a owl:Restriction ;
+                               owl:onProperty tx:hasRiskEvent ;
+                               owl:someValuesFrom tx:LateFiling ] )
+    ] .
+
+# 연락두절 이력이 있는 고객
+tx:UnreachableCustomer a owl:Class ;
+    rdfs:label "연락두절 이력 고객"@ko ;
+    owl:equivalentClass [
+        a owl:Class ;
+        owl:intersectionOf ( tx:Customer
+                             [ a owl:Restriction ;
+                               owl:onProperty tx:hasRiskEvent ;
+                               owl:someValuesFrom tx:NoContact ] )
+    ] .
+
+# ---------------------------------------------------------------------
+# Object Property
+# ---------------------------------------------------------------------
+tx:managedBy a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:label "담당자"@ko ; rdfs:domain tx:Customer ; rdfs:range tx:Accountant .
+tx:manages a owl:ObjectProperty ;
+    rdfs:label "담당 고객"@ko ; owl:inverseOf tx:managedBy .
+
+tx:hasTaxReturn a owl:ObjectProperty ;
+    rdfs:label "신고"@ko ; rdfs:domain tx:Customer ; rdfs:range tx:TaxReturn .
+tx:filedFor a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:label "신고 대상 고객"@ko ; owl:inverseOf tx:hasTaxReturn .
+
+tx:hasSubmission a owl:ObjectProperty ;
+    rdfs:label "자료 제출 현황"@ko ; rdfs:domain tx:TaxReturn ; rdfs:range tx:DocumentSubmission .
+tx:forReturn a owl:ObjectProperty , owl:FunctionalProperty ;
+    owl:inverseOf tx:hasSubmission .
+tx:documentType a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:label "자료 유형"@ko ; rdfs:domain tx:DocumentSubmission ; rdfs:range tx:DocumentType .
+
+tx:hasRiskEvent a owl:ObjectProperty ;
+    rdfs:label "위험 이벤트"@ko ; rdfs:domain tx:Customer ; rdfs:range tx:RiskEvent .
+tx:hasConsultation a owl:ObjectProperty ;
+    rdfs:label "상담 이력"@ko ; rdfs:domain tx:Customer ; rdfs:range tx:Consultation .
+tx:handledBy a owl:ObjectProperty ;
+    rdfs:label "상담자"@ko ; rdfs:domain tx:Consultation ; rdfs:range tx:Accountant .
+tx:hasTask a owl:ObjectProperty ;
+    rdfs:label "후속 업무"@ko ; rdfs:domain tx:Customer ; rdfs:range tx:Task .
+tx:aboutReturn a owl:ObjectProperty ;
+    rdfs:domain tx:Task ; rdfs:range tx:TaxReturn .
+tx:assignedTo a owl:ObjectProperty ;
+    rdfs:label "담당자"@ko ; rdfs:domain tx:Task ; rdfs:range tx:Accountant .
+
+# ---------------------------------------------------------------------
+# Datatype Property
+# ---------------------------------------------------------------------
+tx:id             a owl:DatatypeProperty ; rdfs:label "식별자"@ko ; rdfs:range xsd:string .
+tx:name           a owl:DatatypeProperty ; rdfs:label "이름"@ko ; rdfs:range xsd:string .
+tx:businessRegNo  a owl:DatatypeProperty ; rdfs:label "사업자등록번호"@ko ; rdfs:domain tx:Customer ; rdfs:range xsd:string .
+tx:industry       a owl:DatatypeProperty ; rdfs:label "업종"@ko ; rdfs:domain tx:Customer ; rdfs:range xsd:string .
+tx:businessStatus a owl:DatatypeProperty ; rdfs:label "영업 상태"@ko ; rdfs:domain tx:Customer ; rdfs:range xsd:string .
+tx:riskLevel      a owl:DatatypeProperty ; rdfs:label "위험 등급"@ko ; rdfs:domain tx:Customer ; rdfs:range xsd:string .
+tx:team           a owl:DatatypeProperty ; rdfs:label "팀"@ko ; rdfs:domain tx:Accountant ; rdfs:range xsd:string .
+tx:maxWorkload    a owl:DatatypeProperty ; rdfs:label "최대 담당 고객 수"@ko ; rdfs:domain tx:Accountant ; rdfs:range xsd:integer .
+
+tx:taxKind        a owl:DatatypeProperty ; rdfs:label "세목"@ko ; rdfs:domain tx:TaxReturn ; rdfs:range xsd:string .
+tx:period         a owl:DatatypeProperty ; rdfs:label "과세 기간"@ko ; rdfs:domain tx:TaxReturn ; rdfs:range xsd:string .
+tx:dueDate        a owl:DatatypeProperty ; rdfs:label "신고 기한"@ko ; rdfs:range xsd:date .
+tx:returnStatus   a owl:DatatypeProperty ; rdfs:label "신고 상태"@ko ; rdfs:domain tx:TaxReturn ; rdfs:range xsd:string .
+tx:filedAt        a owl:DatatypeProperty ; rdfs:label "신고일"@ko ; rdfs:domain tx:TaxReturn ; rdfs:range xsd:date .
+
+tx:submissionStatus a owl:DatatypeProperty ; rdfs:label "제출 상태"@ko ; rdfs:domain tx:DocumentSubmission ; rdfs:range xsd:string .
+tx:requestedAt    a owl:DatatypeProperty ; rdfs:label "요청일"@ko ; rdfs:range xsd:date .
+tx:submittedAt    a owl:DatatypeProperty ; rdfs:label "제출일"@ko ; rdfs:range xsd:date .
+
+tx:occurredAt     a owl:DatatypeProperty ; rdfs:label "발생일"@ko ; rdfs:range xsd:date .
+tx:topic          a owl:DatatypeProperty ; rdfs:label "상담 주제"@ko ; rdfs:range xsd:string .
+tx:summary        a owl:DatatypeProperty ; rdfs:label "요약"@ko ; rdfs:range xsd:string .
+tx:taskType       a owl:DatatypeProperty ; rdfs:label "업무 유형"@ko ; rdfs:domain tx:Task ; rdfs:range xsd:string .
+tx:taskStatus     a owl:DatatypeProperty ; rdfs:label "업무 상태"@ko ; rdfs:domain tx:Task ; rdfs:range xsd:string .

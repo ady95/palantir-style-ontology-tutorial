@@ -1,0 +1,28 @@
+[project]
+name = "palantir-style-ontology-tutorial"
+version = "0.1.0"
+description = "「팔란티어식 온톨로지 따라하기」 예제 코드"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "python-dotenv>=1.0",
+]
+
+[dependency-groups]
+# PART 2. 전통적인 온톨로지 (RDF·OWL·SPARQL·SHACL)
+semantic = [
+    "rdflib>=7.1",
+    "owlrl>=7.1",
+    "pyshacl>=0.30",
+    "owlready2>=0.47",
+]
+dev = [
+    "pytest>=8",
+]
+
+[tool.uv]
+default-groups = ["semantic", "dev"]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
