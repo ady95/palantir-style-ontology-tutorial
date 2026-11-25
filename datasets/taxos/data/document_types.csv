@@ -1,0 +1,6 @@
+doc_type_code,doc_name,for_general,for_simplified,for_corporation
+D01,매출 세금계산서 내역,true,true,true
+D02,매입 세금계산서 내역,true,true,true
+D03,신용카드·현금영수증 매출 내역,true,true,true
+D04,사업용 신용카드 사용내역,true,false,true
+D05,법인 통장 거래내역,false,false,true

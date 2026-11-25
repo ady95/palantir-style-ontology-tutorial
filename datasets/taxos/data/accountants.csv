@@ -1,0 +1,9 @@
+accountant_id,name,role,team,max_workload,can_approve,email
+A001,진윤서,세무사,세무1팀,60,true,a001@example.com
+A002,방희호,실무자,세무1팀,40,false,a002@example.com
+A003,권도하,실무자,세무1팀,40,false,a003@example.com
+A004,엄승우,실무자,세무1팀,40,false,a004@example.com
+A005,우나지,세무사,세무2팀,60,true,a005@example.com
+A006,이우은,실무자,세무2팀,40,false,a006@example.com
+A007,권시미,실무자,세무2팀,40,false,a007@example.com
+A008,이동예,실무자,세무2팀,40,false,a008@example.com
