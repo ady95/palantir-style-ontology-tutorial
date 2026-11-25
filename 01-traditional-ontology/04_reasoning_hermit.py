@@ -14,15 +14,28 @@ import time
 from pathlib import Path
 
 from owlready2 import OwlReadyInconsistentOntologyError, World, sync_reasoner
-from rdflib import Graph
+from rdflib import Graph, Literal
+from rdflib.namespace import XSD
 
 from common import load_all, load_ontology
 
 TX_IRI = "https://example.org/taxos#"
 
 
+def for_dl_reasoner(g: Graph) -> Graph:
+    """HermiT는 OWL 2 datatype map에 있는 타입만 지원한다. xsd:date는 그 목록에 없으므로
+    날짜 값과 xsd:date range 선언을 뺀다. (분류·일관성 검사에는 날짜가 필요 없다)"""
+    out = Graph()
+    for s, p, o in g:
+        if o == XSD.date or (isinstance(o, Literal) and o.datatype == XSD.date):
+            continue
+        out.add((s, p, o))
+    return out
+
+
 def to_owlready(g: Graph, tmp: Path, world: World):
     """rdflib 그래프 → RDF/XML 파일 → owlready2 로딩 (owlready2는 Turtle을 읽지 못함)"""
+    g = for_dl_reasoner(g)
     path = tmp / "graph.owl"
     g.serialize(path, format="xml")
     onto = world.get_ontology(path.as_uri()).load()

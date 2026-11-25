@@ -51,10 +51,19 @@ def load_all() -> Graph:
     return g
 
 
+def short(value) -> str:
+    """IRI는 tx:Customer 처럼 줄여서 표시"""
+    s = str(value)
+    for prefix, ns in (("tx:", TX), ("txd:", TXD)):
+        if s.startswith(str(ns)):
+            return prefix + s[len(str(ns)):]
+    return s
+
+
 def print_rows(title: str, rows, limit: int = 10) -> None:
     rows = list(rows)
     print(f"\n## {title}  ({len(rows)}건)")
     for row in rows[:limit]:
-        print("  " + " | ".join(str(v) for v in row))
+        print("  " + " | ".join(short(v) for v in row))
     if len(rows) > limit:
         print(f"  ... 외 {len(rows) - limit}건")
