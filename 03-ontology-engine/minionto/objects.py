@@ -36,8 +36,10 @@ class OntologyClient:
     """온톨로지 정의 + DB 연결. 모든 조회의 출발점."""
 
     def __init__(self, onto: Ontology, url: str | None = None, *,
-                 today: date | str | None = None, actor: dict | None = None):
+                 today: date | str | None = None, actor: dict | None = None,
+                 base_dir: str | Path | None = None):
         self.onto = onto
+        self.base_dir = Path(base_dir) if base_dir else None   # functions.py 를 찾는 위치
         self.schema = Schema(onto)
         self._url = url                         # 생략하면 연결할 때 .env 에서 읽는다
         self.today = date.fromisoformat(today) if isinstance(today, str) else today
@@ -47,7 +49,7 @@ class OntologyClient:
 
     @classmethod
     def open(cls, path: str | Path, url: str | None = None, **kw) -> OntologyClient:
-        return cls(load(path), url, **kw)
+        return cls(load(path), url, base_dir=Path(path).resolve().parent, **kw)
 
     # ------------------------------------------------------------------ 연결
     @property
@@ -71,6 +73,23 @@ class OntologyClient:
     def fetch(self, query: sql.Composable) -> list[dict]:
         self.query_log.append(query.as_string(self.conn))
         return self.conn.execute(query).fetchall()
+
+    # ------------------------------------------------------------------ 18장: Function · Action
+    @property
+    def functions(self):
+        """Function Engine — client.functions.call("has_capacity", accountant="A002")"""
+        if getattr(self, "_functions", None) is None:
+            from .functions import FunctionEngine
+            self._functions = FunctionEngine(self)
+        return self._functions
+
+    @property
+    def actions(self):
+        """Action Engine — client.actions.apply("request_missing_documents", "R00024", actor=...)"""
+        if getattr(self, "_actions", None) is None:
+            from .actions import ActionEngine
+            self._actions = ActionEngine(self)
+        return self._actions
 
     # ------------------------------------------------------------------ 진입점
     def objects(self, object_type: str) -> ObjectSet:
@@ -111,7 +130,7 @@ class ObjectSet:
 
     def __init__(self, client: OntologyClient, object_type: str, conditions: tuple[Condition, ...] = (),
                  order: tuple[tuple[str, bool], ...] = (), limit_: int | None = None, offset_: int = 0,
-                 params: dict | None = None):
+                 params: dict | None = None, actor: dict | None = None):
         self.client = client
         self.object_type = object_type
         self.conditions = conditions
@@ -119,10 +138,11 @@ class ObjectSet:
         self._limit = limit_
         self._offset = offset_
         self.params = params or {}
+        self.actor = actor                      # None 이면 client.actor
 
     def _copy(self, **kw) -> ObjectSet:
         base = dict(conditions=self.conditions, order=self.order, limit_=self._limit,
-                    offset_=self._offset, params=self.params)
+                    offset_=self._offset, params=self.params, actor=self.actor)
         base.update(kw)
         return ObjectSet(self.client, self.object_type, **base)
 
@@ -137,6 +157,10 @@ class ObjectSet:
     def bind(self, **params: Any) -> ObjectSet:
         """조건식 안의 $params.<이름> 값을 정한다"""
         return self._copy(params={**self.params, **params})
+
+    def as_actor(self, actor: dict) -> ObjectSet:
+        """조건식 안의 $actor.* 값을 정한다 (Action 실행자)"""
+        return self._copy(actor=actor)
 
     def pivot(self, link: str) -> ObjectSet:
         """링크로 이어진 객체 집합으로 이동 (Search Around)
@@ -155,7 +179,7 @@ class ObjectSet:
         back = reverse_end(schema, end)
         where = Condition(all_=list(self.conditions)) if self.conditions else None
         cond = Condition(some=LinkQuantifier(link=back.name, where=where))
-        return ObjectSet(self.client, end.target, (cond,), params=self.params)
+        return ObjectSet(self.client, end.target, (cond,), params=self.params, actor=self.actor)
 
     def order_by(self, *paths: str) -> ObjectSet:
         """정렬. '-due_date' 처럼 앞에 - 를 붙이면 내림차순. 단일 값 경로만 가능"""
@@ -172,7 +196,7 @@ class ObjectSet:
                  aggregates: list[tuple[str, str, str | None]] | None = None,
                  paged: bool = True) -> sql.Composable:
         """select: (경로, 별칭) · group: 그룹 경로 · aggregates: (별칭, 함수, 경로)"""
-        comp = Compiler(self.client.schema, self.client.bindings(self.params))
+        comp = Compiler(self.client.schema, self.client.bindings(self.params, self.actor))
         scope = comp.scope(self.object_type)
         ot = self.client.onto.object_types[self.object_type]
 
