@@ -406,12 +406,6 @@ class Registry:
             if row["registered_by"].get("id") == actor.get("id") and row["status"] == "draft":
                 raise RegistryError("등록자 본인은 활성화할 수 없습니다 (직무 분리: 다른 사람이 검토)")
             target = self._version(row)
-            if check_db:
-                from .db import check_database, database_url
-                report = check_database(target.onto, database_url(target.onto, db_url))
-                if not report.ok:
-                    raise RegistryError("DB 대조 검사 실패 — 정의가 실제 스키마와 맞지 않습니다",
-                                        [str(i) for i in report.errors])
             current = self._row(name, None, lock=True)
             changes = diff(self._version(current).onto, target.onto) if current else []
             breaking = [c for c in changes if c.level == "breaking"]
@@ -419,6 +413,12 @@ class Registry:
                 raise RegistryError(f"v{current['version']} → v{version}: 기존 사용자를 깨는 변경이 "
                                     f"{len(breaking)}건 있습니다 (allow_breaking 으로 허용)",
                                     [str(c) for c in breaking])
+            if check_db:                                 # 정의 비교(DB 불필요) 다음에 실제 스키마 대조
+                from .db import check_database, database_url
+                report = check_database(target.onto, database_url(target.onto, db_url))
+                if not report.ok:
+                    raise RegistryError("DB 대조 검사 실패 — 정의가 실제 스키마와 맞지 않습니다",
+                                        [str(i) for i in report.errors])
             if current:
                 self.conn.execute(f"UPDATE {REGISTRY_SCHEMA}.ontology_versions SET status = 'retired' "
                                   "WHERE name = %s AND version = %s", (name, current["version"]))

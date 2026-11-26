@@ -23,6 +23,7 @@
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -318,6 +319,10 @@ def create_app(served: list[Served] | dict[str, Served], *, api_keys: dict[str, 
     @app.post("/v1/ontologies/{ontology}/approvals/{approval_id}/decide", tags=["actions"])
     def decide(approval_id: str, body: DecideRequest, client: OntologyClient = Depends(client_of),
                actor: dict = Depends(current_actor)):
+        try:
+            uuid.UUID(approval_id)
+        except ValueError:
+            raise HTTPException(404, f"승인 요청 '{approval_id}' 을 찾을 수 없습니다") from None
         try:
             result = client.actions.decide(approval_id, actor, approve=body.approve, comment=body.comment)
         except QueryError as e:

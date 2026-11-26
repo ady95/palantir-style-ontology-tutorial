@@ -18,6 +18,7 @@ import importlib.util
 import inspect
 import sys
 import tempfile
+import warnings
 from contextlib import nullcontext
 from pathlib import Path
 
@@ -26,6 +27,7 @@ import yaml
 ENGINE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ENGINE))
 
+warnings.filterwarnings("ignore", message="Using `httpx` with")   # Starlette 의 향후 변경 예고 (실습과 무관)
 from fastapi.testclient import TestClient  # noqa: E402
 
 from minionto.api import Served, create_app, load_api_keys  # noqa: E402
@@ -82,10 +84,15 @@ def demo_registry(reg: Registry) -> Served:
               f"권장 버전 v{r2.suggested_version}")
         for c in r2.changes:
             print("  " + str(c))
-        try:
-            reg.activate("taxos", "0.2.0", actor=REVIEWER)
-        except RegistryError as e:
-            print("  검토자 활성화: 거부 — " + str(e).splitlines()[0])
+        for allow in (False, True):
+            try:
+                reg.activate("taxos", "0.2.0", actor=REVIEWER, allow_breaking=allow)
+                print("  검토자 활성화: 성공")
+            except RegistryError as e:
+                lines = str(e).splitlines()
+                print(f"  검토자 활성화{' (allow_breaking)' if allow else ''}: 거부 — {lines[0]}")
+                if allow:
+                    print("   " + lines[1])                 # 첫 번째 사유
 
     print("\n등록 이력")
     for h in reg.history("taxos"):

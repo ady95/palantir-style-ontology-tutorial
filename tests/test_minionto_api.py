@@ -161,6 +161,7 @@ def test_approval_over_api(api):
     ok = api.post(f"{P}/approvals/{aid}/decide", headers=TAX, json={"approve": True})
     assert ok.status_code == 200 and ok.json()["status"] == "completed"
     assert api.post(f"{P}/approvals/{aid}/decide", headers=TAX, json={}).status_code == 409
+    assert api.post(f"{P}/approvals/not-a-uuid/decide", headers=TAX, json={}).status_code == 404
 
 
 # ================================================================ SDK (DB)
