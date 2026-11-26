@@ -1,0 +1,1071 @@
+{
+  "$defs": {
+    "Action": {
+      "additionalProperties": false,
+      "properties": {
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "target": {
+          "description": "Action을 적용할 Object Type",
+          "title": "Target",
+          "type": "string"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Parameter"
+          },
+          "title": "Parameters",
+          "type": "object"
+        },
+        "preconditions": {
+          "items": {
+            "$ref": "#/$defs/Rule"
+          },
+          "title": "Preconditions",
+          "type": "array"
+        },
+        "permission": {
+          "$ref": "#/$defs/Permission"
+        },
+        "approval": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Approval"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "edits": {
+          "items": {
+            "$ref": "#/$defs/Edit"
+          },
+          "minItems": 1,
+          "title": "Edits",
+          "type": "array"
+        },
+        "emits": {
+          "description": "실행 후 발행할 이벤트 이름 (Outbox)",
+          "items": {
+            "type": "string"
+          },
+          "title": "Emits",
+          "type": "array"
+        }
+      },
+      "required": [
+        "display_name",
+        "target",
+        "permission",
+        "edits"
+      ],
+      "title": "Action",
+      "type": "object"
+    },
+    "Approval": {
+      "additionalProperties": false,
+      "properties": {
+        "required_if": {
+          "$ref": "#/$defs/Condition"
+        },
+        "approver_roles": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Approver Roles",
+          "type": "array"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "required_if",
+        "approver_roles"
+      ],
+      "title": "Approval",
+      "type": "object"
+    },
+    "Condition": {
+      "additionalProperties": false,
+      "description": "조건식. 아래 형식 중 정확히 하나를 쓴다.\n\n- 비교:       {field: customer.risk_level, op: eq, value: 높음}\n- 논리:       {all: [...]}, {any: [...]}, {not: {...}}\n- 링크 수량:  {some: {link: tasks, where: {...}}}, {none: {...}}\n- 함수:       {function: has_capacity, args: {...}}   (참이면 통과)\n\nfield 는 대상 객체 기준 경로(속성 또는 링크.속성)이거나 $actor.* / $params.* 참조다.\nvalue 가 $ 로 시작하면 참조($params.x, $actor.id, $target.x, $now, $today)로 해석한다.",
+      "properties": {
+        "field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field"
+        },
+        "op": {
+          "anyOf": [
+            {
+              "enum": [
+                "eq",
+                "ne",
+                "in",
+                "not_in",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "is_null",
+                "not_null"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Op"
+        },
+        "value": {
+          "default": null,
+          "title": "Value"
+        },
+        "all": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Condition"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "All"
+        },
+        "any": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Condition"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Any"
+        },
+        "not": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Condition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "some": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LinkQuantifier"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "none": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LinkQuantifier"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "function": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Function"
+        },
+        "args": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Args"
+        }
+      },
+      "title": "Condition",
+      "type": "object"
+    },
+    "Datasource": {
+      "additionalProperties": false,
+      "properties": {
+        "url_env": {
+          "description": "DB 접속 URL을 담은 환경변수 이름",
+          "title": "Url Env",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url_env"
+      ],
+      "title": "Datasource",
+      "type": "object"
+    },
+    "Edit": {
+      "additionalProperties": false,
+      "description": "Action이 만드는 변경. 아래 형식 중 하나를 쓴다.\n\n- {update: target, set: {...}}                      대상 객체 수정\n- {update_linked: <링크>, where: {...}, set: {...}} 링크로 연결된 객체들 수정\n- {create: <ObjectType>, values: {...}}             새 객체 생성",
+      "properties": {
+        "update": {
+          "anyOf": [
+            {
+              "const": "target",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Update"
+        },
+        "update_linked": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Update Linked"
+        },
+        "create": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Create"
+        },
+        "where": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Condition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "set": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Set"
+        },
+        "values": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Values"
+        }
+      },
+      "title": "Edit",
+      "type": "object"
+    },
+    "Function": {
+      "additionalProperties": false,
+      "properties": {
+        "display_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "inputs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Parameter"
+          },
+          "title": "Inputs",
+          "type": "object"
+        },
+        "returns": {
+          "$ref": "#/$defs/Parameter"
+        },
+        "implementation": {
+          "description": "'모듈경로:함수명' (예: functions:filing_delay_risk)",
+          "pattern": "^[A-Za-z_][\\w.]*:[A-Za-z_]\\w*$",
+          "title": "Implementation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "description",
+        "returns",
+        "implementation"
+      ],
+      "title": "Function",
+      "type": "object"
+    },
+    "Interface": {
+      "additionalProperties": false,
+      "properties": {
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "properties": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/InterfaceProperty"
+          },
+          "title": "Properties"
+        }
+      },
+      "required": [
+        "display_name",
+        "properties"
+      ],
+      "title": "Interface",
+      "type": "object"
+    },
+    "InterfaceProperty": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "string",
+            "integer",
+            "decimal",
+            "float",
+            "boolean",
+            "date",
+            "datetime",
+            "enum",
+            "binary"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "InterfaceProperty",
+      "type": "object"
+    },
+    "LinkQuantifier": {
+      "additionalProperties": false,
+      "properties": {
+        "link": {
+          "title": "Link",
+          "type": "string"
+        },
+        "where": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Condition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "link"
+      ],
+      "title": "LinkQuantifier",
+      "type": "object"
+    },
+    "LinkType": {
+      "additionalProperties": false,
+      "properties": {
+        "display_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "from": {
+          "title": "From",
+          "type": "string"
+        },
+        "to": {
+          "title": "To",
+          "type": "string"
+        },
+        "cardinality": {
+          "enum": [
+            "one_to_one",
+            "one_to_many",
+            "many_to_one",
+            "many_to_many"
+          ],
+          "title": "Cardinality",
+          "type": "string"
+        },
+        "from_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "from 객체의 속성. many_to_many 에서는 생략 시 기본키",
+          "title": "From Key"
+        },
+        "to_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "to 객체의 속성. many_to_many 에서는 생략 시 기본키",
+          "title": "To Key"
+        },
+        "through": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Through"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "forward_name": {
+          "description": "from 객체에서 to 객체로 가는 이름",
+          "title": "Forward Name",
+          "type": "string"
+        },
+        "reverse_name": {
+          "description": "to 객체에서 from 객체로 가는 이름",
+          "title": "Reverse Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "cardinality",
+        "forward_name",
+        "reverse_name"
+      ],
+      "title": "LinkType",
+      "type": "object"
+    },
+    "ObjectType": {
+      "additionalProperties": false,
+      "properties": {
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "title_property": {
+          "description": "객체를 사람이 알아보는 대표 속성",
+          "title": "Title Property",
+          "type": "string"
+        },
+        "properties": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Property"
+          },
+          "title": "Properties"
+        },
+        "implements": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Implements",
+          "type": "array"
+        }
+      },
+      "required": [
+        "display_name",
+        "source",
+        "title_property",
+        "properties"
+      ],
+      "title": "ObjectType",
+      "type": "object"
+    },
+    "OntologyInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "title": "OntologyInfo",
+      "type": "object"
+    },
+    "Parameter": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "string",
+            "integer",
+            "decimal",
+            "float",
+            "boolean",
+            "date",
+            "datetime",
+            "enum",
+            "object",
+            "list",
+            "struct"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "default": {
+          "default": null,
+          "title": "Default"
+        },
+        "values": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Values"
+        },
+        "object_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Object Type"
+        },
+        "items": {
+          "anyOf": [
+            {
+              "enum": [
+                "string",
+                "integer",
+                "decimal",
+                "float",
+                "boolean",
+                "date",
+                "datetime",
+                "enum",
+                "object",
+                "list",
+                "struct"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Items"
+        },
+        "fields": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/Parameter"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fields"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Parameter",
+      "type": "object"
+    },
+    "Permission": {
+      "additionalProperties": false,
+      "properties": {
+        "roles": {
+          "description": "실행할 수 있는 역할",
+          "items": {
+            "type": "string"
+          },
+          "title": "Roles",
+          "type": "array"
+        },
+        "actor_types": {
+          "items": {
+            "enum": [
+              "human",
+              "agent",
+              "system"
+            ],
+            "type": "string"
+          },
+          "title": "Actor Types",
+          "type": "array"
+        },
+        "check": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Condition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "역할 외 추가 조건 (예: 본인 담당 고객만)"
+        }
+      },
+      "required": [
+        "roles"
+      ],
+      "title": "Permission",
+      "type": "object"
+    },
+    "Property": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "string",
+            "integer",
+            "decimal",
+            "float",
+            "boolean",
+            "date",
+            "datetime",
+            "enum",
+            "binary"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "column": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "DB 컬럼명. 생략하면 속성명과 같다.",
+          "title": "Column"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "values": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "enum 타입의 허용 값",
+          "title": "Values"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Property",
+      "type": "object"
+    },
+    "Rule": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "description": "조건을 만족하지 못할 때 사용자·에이전트에게 돌려줄 설명",
+          "title": "Message",
+          "type": "string"
+        },
+        "check": {
+          "$ref": "#/$defs/Condition"
+        }
+      },
+      "required": [
+        "message",
+        "check"
+      ],
+      "title": "Rule",
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "table": {
+          "title": "Table",
+          "type": "string"
+        },
+        "primary_key": {
+          "description": "기본키 역할을 하는 '속성' 이름",
+          "title": "Primary Key",
+          "type": "string"
+        },
+        "id_strategy": {
+          "default": "provided",
+          "enum": [
+            "provided",
+            "uuid",
+            "prefixed_sequence"
+          ],
+          "title": "Id Strategy",
+          "type": "string"
+        },
+        "id_prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "prefixed_sequence 일 때 접두어 (예: T)",
+          "title": "Id Prefix"
+        }
+      },
+      "required": [
+        "table",
+        "primary_key"
+      ],
+      "title": "Source",
+      "type": "object"
+    },
+    "Through": {
+      "additionalProperties": false,
+      "properties": {
+        "table": {
+          "title": "Table",
+          "type": "string"
+        },
+        "from_column": {
+          "title": "From Column",
+          "type": "string"
+        },
+        "to_column": {
+          "title": "To Column",
+          "type": "string"
+        }
+      },
+      "required": [
+        "table",
+        "from_column",
+        "to_column"
+      ],
+      "title": "Through",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "ontology": {
+      "$ref": "#/$defs/OntologyInfo"
+    },
+    "datasource": {
+      "$ref": "#/$defs/Datasource"
+    },
+    "roles": {
+      "description": "이 온톨로지에서 쓰는 사용자 역할",
+      "items": {
+        "type": "string"
+      },
+      "title": "Roles",
+      "type": "array"
+    },
+    "interfaces": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Interface"
+      },
+      "title": "Interfaces",
+      "type": "object"
+    },
+    "object_types": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ObjectType"
+      },
+      "title": "Object Types",
+      "type": "object"
+    },
+    "link_types": {
+      "additionalProperties": {
+        "$ref": "#/$defs/LinkType"
+      },
+      "title": "Link Types",
+      "type": "object"
+    },
+    "functions": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Function"
+      },
+      "title": "Functions",
+      "type": "object"
+    },
+    "actions": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Action"
+      },
+      "title": "Actions",
+      "type": "object"
+    }
+  },
+  "required": [
+    "ontology",
+    "datasource",
+    "object_types"
+  ],
+  "title": "Ontology",
+  "type": "object"
+}
