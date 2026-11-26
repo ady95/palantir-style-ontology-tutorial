@@ -149,6 +149,11 @@ def test_permission(tx):
     assert res.status == "denied" and "AI비서" in res.messages[0]
     res = tx.actions.apply("assign_accountant", "C0001", actor={**AI_AGENT, "role": "세무사"})
     assert res.status == "denied" and "agent" in res.messages[0]          # 역할은 맞아도 human 전용
+    # 객체를 파라미터로 넘긴 요청도 감사 로그에 남는다 (기본키로 기록)
+    res = tx.actions.apply("assign_accountant", "C0001", actor=AI_AGENT,
+                           params={"accountant": tx.get("Accountant", "A004")})
+    assert scalar(tx, "SELECT params->>'accountant' FROM minionto.action_log WHERE execution_id=%s",
+                  res.execution_id) == "A004"
 
 
 def test_candidates_respect_permission(tx):

@@ -87,6 +87,8 @@ def _json(value: Any) -> Jsonb:
     def default(v):
         if isinstance(v, (date, datetime, Decimal, uuid.UUID)):
             return str(v)
+        if hasattr(v, "pk") and hasattr(v, "object_type"):     # OntoObject → 기본키
+            return v.pk
         raise TypeError(type(v).__name__)
     return Jsonb(value, dumps=lambda o: json.dumps(o, ensure_ascii=False, default=default))
 
