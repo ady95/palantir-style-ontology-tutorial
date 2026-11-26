@@ -16,12 +16,18 @@ semantic = [
     "pyshacl>=0.30",
     "owlready2>=0.47",
 ]
+# PART 4~. Mini Ontology Engine
+engine = [
+    "pydantic>=2.7",
+    "pyyaml>=6",
+    "psycopg[binary]>=3.2",
+]
 dev = [
     "pytest>=8",
 ]
 
 [tool.uv]
-default-groups = ["semantic", "dev"]
+default-groups = ["semantic", "engine", "dev"]
 package = false
 
 [tool.pytest.ini_options]

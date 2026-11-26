@@ -1,0 +1,333 @@
+# yaml-language-server: $schema=../../schema/minionto.schema.json
+#
+# AI Native Tax OS 온톨로지 (실습용)
+# - 데이터: datasets/taxos (합성 데이터), DB: taxos
+# - MiniOnto 자체 DSL이며 팔란티어 공식 문법이 아니다.
+
+ontology:
+  name: taxos
+  version: 0.1.0
+  display_name: 세무 사무소 운영 온톨로지
+  description: 고객·신고·필수 자료·업무를 객체로 정의하고, 자료 요청·담당자 배정 같은 업무를 Action으로 실행한다.
+
+datasource:
+  url_env: TAXOS_DATABASE_URL
+
+roles: [세무사, 실무자, AI비서]
+
+# ---------------------------------------------------------------------------
+# Interface: 여러 객체 타입이 공유하는 형태
+# ---------------------------------------------------------------------------
+interfaces:
+  Trackable:
+    display_name: 상태 추적 대상
+    description: 업무 상태(status)를 가지는 객체. 상태별 목록·대시보드를 공통으로 만든다.
+    properties:
+      status: { type: enum }
+
+# ---------------------------------------------------------------------------
+# Object Type
+# ---------------------------------------------------------------------------
+object_types:
+  Accountant:
+    display_name: 담당자
+    source: { table: accountants, primary_key: accountant_id }
+    title_property: name
+    properties:
+      accountant_id: { type: string, required: true }
+      name:          { type: string, required: true, display_name: 이름 }
+      role:          { type: enum, values: [세무사, 실무자], required: true }
+      team:          { type: string, display_name: 팀 }
+      max_workload:  { type: integer, required: true, display_name: 최대 담당 고객 수 }
+      can_approve:   { type: boolean, required: true, display_name: 승인 권한 }
+      email:         { type: string }
+
+  Customer:
+    display_name: 고객
+    source: { table: customers, primary_key: customer_id }
+    title_property: company_name
+    properties:
+      customer_id:     { type: string, required: true }
+      company_name:    { type: string, required: true, display_name: 상호 }
+      representative:  { type: string, display_name: 대표자 }
+      business_reg_no: { type: string, required: true, display_name: 사업자등록번호 }
+      business_type:   { type: enum, values: [개인, 법인], required: true }
+      vat_type:        { type: enum, values: [일반과세자, 간이과세자], required: true }
+      industry:        { type: string, display_name: 업종 }
+      business_status: { type: enum, values: [영업, 휴업, 폐업], column: status, required: true, display_name: 영업 상태 }
+      risk_level:      { type: enum, values: [낮음, 보통, 높음], required: true, display_name: 위험 등급 }
+      accountant_id:   { type: string, required: true }
+      phone:           { type: string }
+      contracted_at:   { type: date, display_name: 계약일 }
+
+  TaxReturn:
+    display_name: 세무 신고
+    source: { table: tax_returns, primary_key: return_id }
+    title_property: period
+    implements: [Trackable]
+    properties:
+      return_id:   { type: string, required: true }
+      customer_id: { type: string, required: true }
+      tax_kind:    { type: string, required: true, display_name: 세목 }
+      period:      { type: string, required: true, display_name: 과세 기간 }
+      due_date:    { type: date, required: true, display_name: 신고 기한 }
+      status:      { type: enum, values: [자료수집중, 검토중, 신고완료, 기한후신고], required: true }
+      filed_at:    { type: date, display_name: 신고일 }
+
+  DocumentType:
+    display_name: 필수 자료 유형
+    source: { table: document_types, primary_key: doc_type_code }
+    title_property: doc_name
+    properties:
+      doc_type_code:   { type: string, required: true }
+      doc_name:        { type: string, required: true }
+      for_general:     { type: boolean, required: true, display_name: 개인 일반과세자 적용 }
+      for_simplified:  { type: boolean, required: true, display_name: 개인 간이과세자 적용 }
+      for_corporation: { type: boolean, required: true, display_name: 법인 적용 }
+
+  DocumentSubmission:
+    display_name: 자료 제출 현황
+    description: 신고별·자료별 제출 상태. '기록 없음'과 '미제출'을 구분하기 위해 상태를 명시적으로 관리한다.
+    source: { table: document_submissions, primary_key: submission_id }
+    title_property: doc_type_code
+    implements: [Trackable]
+    properties:
+      submission_id: { type: string, required: true }
+      return_id:     { type: string, required: true }
+      doc_type_code: { type: string, required: true }
+      status:        { type: enum, values: [미요청, 요청됨, 제출완료, 해당없음], required: true }
+      requested_at:  { type: date }
+      submitted_at:  { type: date }
+
+  Consultation:
+    display_name: 상담 이력
+    source: { table: consultations, primary_key: consultation_id }
+    title_property: topic
+    properties:
+      consultation_id: { type: string, required: true }
+      customer_id:     { type: string, required: true }
+      accountant_id:   { type: string, required: true }
+      channel:         { type: enum, values: [전화, 카카오톡, 이메일, 방문], required: true }
+      consulted_at:    { type: datetime, required: true }
+      topic:           { type: string, required: true }
+      summary:         { type: string, required: true }
+
+  Task:
+    display_name: 후속 업무
+    source: { table: tasks, primary_key: task_id, id_strategy: prefixed_sequence, id_prefix: T }
+    title_property: task_type
+    implements: [Trackable]
+    properties:
+      task_id:     { type: string, required: true }
+      customer_id: { type: string, required: true }
+      return_id:   { type: string }
+      task_type:   { type: enum, values: [자료요청, 신고서검토, 고객연락, 담당자배정], required: true }
+      assignee_id: { type: string, required: true }
+      status:      { type: enum, values: [대기, 진행중, 완료, 취소], required: true }
+      due_date:    { type: date, required: true }
+      created_by:  { type: enum, values: [human, agent, system], required: true }
+      created_at:  { type: datetime, required: true }
+      note:        { type: string }
+
+  RiskEvent:
+    display_name: 위험 이벤트
+    source: { table: risk_events, primary_key: event_id }
+    title_property: event_type
+    properties:
+      event_id:    { type: string, required: true }
+      customer_id: { type: string, required: true }
+      event_type:  { type: enum, values: [기한후신고, 가산세부과, 연락두절, 자료지연제출], required: true }
+      occurred_at: { type: date, required: true }
+      note:        { type: string }
+
+# ---------------------------------------------------------------------------
+# Link Type: forward_name 은 from 쪽에서, reverse_name 은 to 쪽에서 부르는 이름
+# ---------------------------------------------------------------------------
+link_types:
+  customer_accountant:
+    { from: Customer, to: Accountant, cardinality: many_to_one,
+      from_key: accountant_id, to_key: accountant_id, forward_name: accountant, reverse_name: customers }
+  customer_tax_returns:
+    { from: Customer, to: TaxReturn, cardinality: one_to_many,
+      from_key: customer_id, to_key: customer_id, forward_name: tax_returns, reverse_name: customer }
+  tax_return_submissions:
+    { from: TaxReturn, to: DocumentSubmission, cardinality: one_to_many,
+      from_key: return_id, to_key: return_id, forward_name: submissions, reverse_name: tax_return }
+  submission_document_type:
+    { from: DocumentSubmission, to: DocumentType, cardinality: many_to_one,
+      from_key: doc_type_code, to_key: doc_type_code, forward_name: document_type, reverse_name: submissions }
+  customer_consultations:
+    { from: Customer, to: Consultation, cardinality: one_to_many,
+      from_key: customer_id, to_key: customer_id, forward_name: consultations, reverse_name: customer }
+  consultation_accountant:
+    { from: Consultation, to: Accountant, cardinality: many_to_one,
+      from_key: accountant_id, to_key: accountant_id, forward_name: handled_by, reverse_name: consultations }
+  customer_tasks:
+    { from: Customer, to: Task, cardinality: one_to_many,
+      from_key: customer_id, to_key: customer_id, forward_name: tasks, reverse_name: customer }
+  tax_return_tasks:
+    { from: TaxReturn, to: Task, cardinality: one_to_many,
+      from_key: return_id, to_key: return_id, forward_name: tasks, reverse_name: tax_return }
+  task_assignee:
+    { from: Task, to: Accountant, cardinality: many_to_one,
+      from_key: assignee_id, to_key: accountant_id, forward_name: assignee, reverse_name: tasks }
+  customer_risk_events:
+    { from: Customer, to: RiskEvent, cardinality: one_to_many,
+      from_key: customer_id, to_key: customer_id, forward_name: risk_events, reverse_name: customer }
+
+# ---------------------------------------------------------------------------
+# Function: 업무 계산·판단 로직 (구현은 functions.py — 18장)
+# ---------------------------------------------------------------------------
+functions:
+  missing_documents:
+    description: 신고에서 아직 제출되지 않은(미요청·요청됨) 자료 목록
+    inputs:
+      tax_return: { type: object, object_type: TaxReturn }
+    returns: { type: list, items: object, object_type: DocumentSubmission }
+    implementation: functions:missing_documents
+
+  filing_delay_risk:
+    description: 미제출 자료 수, 남은 기한, 과거 위험 이벤트로 신고 지연 위험도를 계산
+    inputs:
+      customer: { type: object, object_type: Customer }
+    returns:
+      type: struct
+      fields:
+        score:   { type: integer }
+        level:   { type: enum, values: [낮음, 보통, 높음] }
+        reasons: { type: list, items: string }
+    implementation: functions:filing_delay_risk
+
+  has_capacity:
+    description: 담당자의 담당 고객 수가 최대치(max_workload) 미만인가
+    inputs:
+      accountant: { type: object, object_type: Accountant }
+    returns: { type: boolean }
+    implementation: functions:has_capacity
+
+  recommend_assignee:
+    description: 같은 팀에서 여유가 가장 많은 실무자 추천
+    inputs:
+      customer: { type: object, object_type: Customer }
+    returns: { type: object, object_type: Accountant }
+    implementation: functions:recommend_assignee
+
+# ---------------------------------------------------------------------------
+# Action: 검증된 업무 실행 (구현은 Action Engine — 18·20~22장)
+# ---------------------------------------------------------------------------
+actions:
+  request_missing_documents:
+    display_name: 누락 자료 요청
+    description: 신고의 미요청 자료를 '요청됨'으로 바꾸고 담당자에게 자료요청 업무를 만든다.
+    target: TaxReturn
+    parameters:
+      note: { type: string, required: false, description: 고객에게 전달할 메모 }
+    preconditions:
+      - message: 자료수집중인 신고만 자료를 요청할 수 있습니다.
+        check: { field: status, op: eq, value: 자료수집중 }
+      - message: 휴업·폐업 고객은 자료 요청 대신 담당자 확인이 필요합니다.
+        check: { field: customer.business_status, op: eq, value: 영업 }
+      - message: 요청할 자료(미요청 상태)가 없습니다.
+        check: { some: { link: submissions, where: { field: status, op: eq, value: 미요청 } } }
+      - message: 이미 진행 중인 자료요청 업무가 있습니다. (중복 실행 방지)
+        check:
+          none:
+            link: tasks
+            where:
+              all:
+                - { field: task_type, op: eq, value: 자료요청 }
+                - { field: status, op: in, value: [대기, 진행중] }
+    permission:
+      roles: [세무사, 실무자, AI비서]
+      check:
+        any:
+          - { field: $actor.role, op: in, value: [세무사, AI비서] }
+          - { field: customer.accountant_id, op: eq, value: $actor.id }
+    approval:
+      required_if:
+        all:
+          - { field: customer.risk_level, op: eq, value: 높음 }
+          - { field: $actor.type, op: eq, value: agent }
+      approver_roles: [세무사]
+      reason: 고위험 고객에 대한 AI의 자료 요청은 세무사 승인 후 실행한다.
+    edits:
+      - update_linked: submissions
+        where: { field: status, op: eq, value: 미요청 }
+        set: { status: 요청됨, requested_at: $today }
+      - create: Task
+        values:
+          customer_id: $target.customer_id
+          return_id:   $target.return_id
+          task_type:   자료요청
+          assignee_id: $target.customer.accountant_id
+          status:      진행중
+          due_date:    $target.due_date
+          created_by:  $actor.type
+          created_at:  $now
+          note:        $params.note
+    emits: [documents_requested]
+
+  assign_accountant:
+    display_name: 담당자 배정
+    target: Customer
+    parameters:
+      accountant: { type: object, object_type: Accountant }
+    preconditions:
+      - message: 이미 같은 담당자가 배정되어 있습니다.
+        check: { field: accountant_id, op: ne, value: $params.accountant }
+      - message: 새 담당자의 담당 고객 수가 최대치에 도달했습니다.
+        check: { function: has_capacity, args: { accountant: $params.accountant } }
+    permission:
+      roles: [세무사]
+      actor_types: [human]
+    edits:
+      - update: target
+        set: { accountant_id: $params.accountant }
+      - create: Task
+        values:
+          customer_id: $target.customer_id
+          task_type:   담당자배정
+          assignee_id: $params.accountant
+          status:      완료
+          due_date:    $today
+          created_by:  $actor.type
+          created_at:  $now
+    emits: [accountant_assigned]
+
+  update_risk_level:
+    display_name: 위험 등급 변경
+    target: Customer
+    parameters:
+      level:  { type: enum, values: [낮음, 보통, 높음] }
+      reason: { type: string }
+    preconditions:
+      - message: 현재와 같은 위험 등급입니다.
+        check: { field: risk_level, op: ne, value: $params.level }
+    permission:
+      roles: [세무사]
+    edits:
+      - update: target
+        set: { risk_level: $params.level }
+    emits: [risk_level_changed]
+
+  complete_filing:
+    display_name: 신고 완료 처리
+    target: TaxReturn
+    preconditions:
+      - message: 검토중인 신고만 완료 처리할 수 있습니다.
+        check: { field: status, op: eq, value: 검토중 }
+      - message: 아직 제출되지 않은 자료가 있습니다.
+        check: { none: { link: submissions, where: { field: status, op: in, value: [미요청, 요청됨] } } }
+    permission:
+      roles: [세무사]
+      actor_types: [human]
+    edits:
+      - update: target
+        set: { status: 신고완료, filed_at: $today }
+      - update_linked: tasks
+        where:
+          all:
+            - { field: task_type, op: eq, value: 신고서검토 }
+            - { field: status, op: in, value: [대기, 진행중] }
+        set: { status: 완료 }
+    emits: [tax_return_filed]

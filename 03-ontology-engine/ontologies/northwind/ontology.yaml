@@ -1,0 +1,162 @@
+# yaml-language-server: $schema=../../schema/minionto.schema.json
+#
+# Northwind 주문·재고·물류 온톨로지 (실습용)
+# - 데이터: datasets/northwind (공개 샘플 DB), DB: northwind
+# - 같은 엔진을 세무(taxos)와 다른 도메인에 재사용할 수 있는지 확인하기 위한 정의
+# - 발주·승인 Action은 실습용 테이블을 추가한 뒤 32장에서 정의한다.
+
+ontology:
+  name: northwind
+  version: 0.1.0
+  display_name: Northwind 주문·재고 온톨로지
+
+datasource:
+  url_env: NORTHWIND_DATABASE_URL
+
+roles: [영업담당, 구매담당, 관리자]
+
+interfaces:
+  Contactable:
+    display_name: 연락 가능한 거래 상대
+    properties:
+      company_name: { type: string }
+      phone:        { type: string }
+
+object_types:
+  Customer:
+    display_name: 고객
+    source: { table: customers, primary_key: customer_id }
+    title_property: company_name
+    implements: [Contactable]
+    properties:
+      customer_id:   { type: string, required: true }
+      company_name:  { type: string, required: true }
+      contact_name:  { type: string }
+      contact_title: { type: string }
+      address:       { type: string }
+      city:          { type: string }
+      region:        { type: string }
+      postal_code:   { type: string }
+      country:       { type: string }
+      phone:         { type: string }
+      fax:           { type: string }
+
+  Employee:
+    display_name: 직원
+    source: { table: employees, primary_key: employee_id }
+    title_property: last_name
+    properties:
+      employee_id: { type: integer, required: true }
+      last_name:   { type: string, required: true }
+      first_name:  { type: string, required: true }
+      title:       { type: string }
+      hire_date:   { type: date }
+      city:        { type: string }
+      country:     { type: string }
+      reports_to:  { type: integer }
+
+  Order:
+    display_name: 주문
+    source: { table: orders, primary_key: order_id }
+    title_property: order_id
+    properties:
+      order_id:      { type: integer, required: true }
+      customer_id:   { type: string }
+      employee_id:   { type: integer }
+      order_date:    { type: date }
+      required_date: { type: date, display_name: 납기일 }
+      shipped_date:  { type: date, display_name: 출고일 }
+      ship_via:      { type: integer }
+      freight:       { type: decimal, display_name: 운송비 }
+      ship_name:     { type: string }
+      ship_city:     { type: string }
+      ship_country:  { type: string }
+
+  Product:
+    display_name: 상품
+    source: { table: products, primary_key: product_id }
+    title_property: product_name
+    properties:
+      product_id:        { type: integer, required: true }
+      product_name:      { type: string, required: true }
+      supplier_id:       { type: integer }
+      category_id:       { type: integer }
+      quantity_per_unit: { type: string }
+      unit_price:        { type: decimal }
+      units_in_stock:    { type: integer, display_name: 재고 }
+      units_on_order:    { type: integer, display_name: 입고 예정 }
+      reorder_level:     { type: integer, display_name: 재주문 기준 }
+      discontinued:      { type: integer, required: true, description: 원본 DB가 0/1 정수로 저장 }
+
+  Supplier:
+    display_name: 공급업체
+    source: { table: suppliers, primary_key: supplier_id }
+    title_property: company_name
+    implements: [Contactable]
+    properties:
+      supplier_id:  { type: integer, required: true }
+      company_name: { type: string, required: true }
+      contact_name: { type: string }
+      country:      { type: string }
+      phone:        { type: string }
+
+  Category:
+    display_name: 상품 분류
+    source: { table: categories, primary_key: category_id }
+    title_property: category_name
+    properties:
+      category_id:   { type: integer, required: true }
+      category_name: { type: string, required: true }
+      description:   { type: string }
+
+  Shipper:
+    display_name: 배송업체
+    source: { table: shippers, primary_key: shipper_id }
+    title_property: company_name
+    implements: [Contactable]
+    properties:
+      shipper_id:   { type: integer, required: true }
+      company_name: { type: string, required: true }
+      phone:        { type: string }
+
+link_types:
+  order_customer:
+    { from: Order, to: Customer, cardinality: many_to_one,
+      from_key: customer_id, to_key: customer_id, forward_name: customer, reverse_name: orders }
+  order_employee:
+    { from: Order, to: Employee, cardinality: many_to_one,
+      from_key: employee_id, to_key: employee_id, forward_name: sales_rep, reverse_name: orders }
+  order_shipper:
+    { from: Order, to: Shipper, cardinality: many_to_one,
+      from_key: ship_via, to_key: shipper_id, forward_name: shipper, reverse_name: orders }
+  order_products:
+    from: Order
+    to: Product
+    cardinality: many_to_many
+    through: { table: order_details, from_column: order_id, to_column: product_id }
+    forward_name: products
+    reverse_name: orders
+  product_supplier:
+    { from: Product, to: Supplier, cardinality: many_to_one,
+      from_key: supplier_id, to_key: supplier_id, forward_name: supplier, reverse_name: products }
+  product_category:
+    { from: Product, to: Category, cardinality: many_to_one,
+      from_key: category_id, to_key: category_id, forward_name: category, reverse_name: products }
+  employee_manager:
+    { from: Employee, to: Employee, cardinality: many_to_one,
+      from_key: reports_to, to_key: employee_id, forward_name: manager, reverse_name: direct_reports }
+
+functions:
+  order_total:
+    description: 주문 상세(단가 × 수량 × (1 - 할인))의 합계
+    inputs:
+      order: { type: object, object_type: Order }
+    returns: { type: decimal }
+    implementation: functions:order_total
+
+  is_low_stock:
+    description: 재고 + 입고 예정이 재주문 기준 이하인 판매 중 상품인가
+    inputs:
+      product: { type: object, object_type: Product }
+    returns: { type: boolean }
+    implementation: functions:is_low_stock
