@@ -171,7 +171,9 @@ def generate(meta: dict, *, class_name: str | None = None) -> str:
         w(f"    def {_method(fname)}({args}) -> {rtype}:\n")
         w(_doc(f"{fn.get('display_name') or fname} — {fn['description']}\n\n반환: {fn['returns']['type']}",
                "        "))
-        w(f"        return self.call({fname!r}, **{_args_dict(fn['inputs'])})\n\n")
+        call = f"self.call({fname!r}, **{_args_dict(fn['inputs'])})"
+        conv = CONVERTERS.get(ret["type"])               # JSON 문자열 → Decimal·date
+        w(f"        return {conv}({call})\n\n" if conv else f"        return {call}\n\n")
 
     if meta["actions"]:
         w("    # ---- Action (dry_run=True 면 검사·변경 결과만 보고 롤백)\n")
