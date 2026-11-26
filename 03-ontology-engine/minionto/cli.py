@@ -3,6 +3,8 @@
   python -m minionto validate ontologies/taxos/ontology.yaml [--db] [--db-url URL]
   python -m minionto describe ontologies/taxos/ontology.yaml [--db]
   python -m minionto query ontologies/taxos/ontology.yaml TaxReturn -w status=자료수집중 -p customer [--sql]
+  python -m minionto call ontologies/taxos/ontology.yaml filing_delay_risk -a customer=C0008
+  python -m minionto run ontologies/taxos/ontology.yaml request_missing_documents R00006 --actor agent-01,AI비서,agent
   python -m minionto schema [-o schema/minionto.schema.json]
 """
 
@@ -144,6 +146,45 @@ def cmd_query(args) -> int:
     return 0
 
 
+def _kv(items: list[str] | None) -> dict:
+    out = {}
+    for item in items or []:
+        k, sep, v = item.partition("=")
+        if not sep:
+            raise SystemExit(f"'키=값' 형식이 아닙니다: {item}")
+        out[k] = v
+    return out
+
+
+def cmd_call(args) -> int:
+    from .functions import FunctionError
+    from .objects import OntologyClient
+    with OntologyClient.open(args.file, args.db_url, today=args.today) as client:
+        try:
+            result = client.functions.call(args.function, **_kv(args.arg))
+        except FunctionError as e:
+            print(f"Function 오류: {e}")
+            return 1
+    print(json.dumps(result, ensure_ascii=False, indent=2, default=str)
+          if isinstance(result, (dict, list)) and not any(hasattr(x, "pk") for x in result) else result)
+    return 0
+
+
+def cmd_run(args) -> int:
+    from .objects import OntologyClient
+    try:
+        aid, role, atype = args.actor.split(",")
+    except ValueError:
+        raise SystemExit("--actor 는 '아이디,역할,유형' 형식입니다 (예: A001,세무사,human)") from None
+    with OntologyClient.open(args.file, args.db_url, today=args.today) as client:
+        result = client.actions.apply(args.action, args.target, actor={"id": aid, "role": role, "type": atype},
+                                      params=_kv(args.arg), dry_run=not args.commit)
+    print(result)
+    if not args.commit and result.ok:
+        print("(dry-run: 반영하려면 --commit)")
+    return 0 if result.status in ("completed", "approval_required") else 1
+
+
 def cmd_schema(args) -> int:
     text = json.dumps(Ontology.model_json_schema(by_alias=True), ensure_ascii=False, indent=2)
     if args.output:
@@ -182,6 +223,25 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("-v", "--verbose", action="store_true", help="실행한 SQL 출력")
     sp.add_argument("--db-url")
     sp.set_defaults(func=cmd_query)
+
+    sp = sub.add_parser("call", help="Function 호출")
+    sp.add_argument("file")
+    sp.add_argument("function")
+    sp.add_argument("-a", "--arg", action="append", metavar="KEY=VALUE", help="입력 (object 는 기본키)")
+    sp.add_argument("--today")
+    sp.add_argument("--db-url")
+    sp.set_defaults(func=cmd_call)
+
+    sp = sub.add_parser("run", help="Action 실행 (기본 dry-run)")
+    sp.add_argument("file")
+    sp.add_argument("action")
+    sp.add_argument("target", help="대상 객체의 기본키")
+    sp.add_argument("--actor", required=True, help="아이디,역할,유형 (예: agent-01,AI비서,agent)")
+    sp.add_argument("-a", "--arg", action="append", metavar="KEY=VALUE", help="파라미터")
+    sp.add_argument("--commit", action="store_true", help="실제로 반영 (생략하면 미리보기 후 롤백)")
+    sp.add_argument("--today")
+    sp.add_argument("--db-url")
+    sp.set_defaults(func=cmd_run)
 
     sp = sub.add_parser("schema", help="에디터 자동완성용 JSON Schema 출력")
     sp.add_argument("-o", "--output")

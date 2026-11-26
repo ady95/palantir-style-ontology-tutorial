@@ -11,7 +11,7 @@
 |---|---|---|
 | 16 | 메타모델·YAML DSL·검증기 | ✅ v0.1 |
 | 17 | Object Engine · Link Engine (조회·관계 탐색) | ✅ v0.1 |
-| 18 | Function Engine · Action Engine | 예정 |
+| 18 | Function Engine · Action Engine (계산·검증된 실행·승인·감사) | ✅ v0.1 |
 | 19 | Ontology Registry · API · SDK | 예정 |
 
 ## 구조
@@ -25,10 +25,14 @@
 │   ├── db.py                 # 실제 PostgreSQL 스키마 대조
 │   ├── query.py              # 조건식 → SQL 컴파일러 (경로 → JOIN, some/none → EXISTS)   [17장]
 │   ├── objects.py            # OntologyClient · ObjectSet · OntoObject                    [17장]
+│   ├── functions.py          # Function Engine: 구현 로드, 입력 변환, 출력 계약 검사      [18장]
+│   ├── actions.py            # Action Engine: 권한→조건→승인→변경→Outbox·감사 (한 트랜잭션) [18장]
 │   ├── loader.py, cli.py
 ├── examples/17_object_link_engine.py   # PART 2 SPARQL 질문을 엔진으로 다시 풀기
+├── examples/18_function_action_engine.py  # Action 실행·거부·승인 시나리오 (기본은 롤백)
 ├── ontologies/               # 도메인 정의 (엔진 코드 수정 없이 교체)
 │   ├── taxos/ontology.yaml       # 세무: Object 8 · Link 10 · Function 4 · Action 4
+│   ├── taxos/functions.py        # Function 구현 (계산만, 테이블 이름 없음)
 │   └── northwind/ontology.yaml   # 주문·재고: Object 7 · Link 7 · Function 2
 └── schema/minionto.schema.json   # 에디터 자동완성용 JSON Schema
 ```
@@ -223,6 +227,60 @@ uv run python examples/17_object_link_engine.py --sql
 
 같은 의미 모델을 RDF 그래프에서 묻든 운영 DB에서 묻든 답이 같다.
 
+---
+
+## Function Engine · Action Engine (18장)
+
+### Function: 계약은 YAML, 계산은 Python
+
+```python
+# ontologies/taxos/functions.py — 첫 인자 ctx 로 온톨로지 조회·기준일을 받는다
+def has_capacity(ctx, accountant):
+    return accountant.customers.count() < accountant.max_workload
+```
+
+```python
+onto.functions.call("has_capacity", accountant="A002")          # 기본키만 넘겨도 객체로 변환 → False
+onto.functions.call("filing_delay_risk", customer="C0008")       # {"score": 82, "level": "높음", "reasons": [...]}
+```
+
+엔진은 정의에 없는 입력·빠진 필수 입력·없는 객체를 막고, **반환값이 선언한 타입과 다르면 오류**를 낸다
+(`boolean` 이라 했는데 `None` 을 돌려주는 구현). 링크 속성처럼 온톨로지로 표현하지 못하는 계산은
+`ctx.sql()` 탈출구를 쓴다 (`order_total`).
+
+### Action: 선언된 업무를 검증하고 한 트랜잭션으로 실행
+
+```python
+eng = onto.actions
+eng.candidates("request_missing_documents", actor=ai)       # 실행 가능한 대상 (실행 조건 = 조회 조건)
+r = eng.apply("request_missing_documents", "R00006", actor=ai, params={"note": "..."}, dry_run=True)
+r.status, r.messages, r.changes                                # 미리보기 → 롤백
+eng.apply(...)                                                 # 실제 실행
+eng.decide(approval_id, approver, approve=True)                # 승인 → 요청자 권한으로 재검사 후 실행
+```
+
+| 단계 | 내용 | 실패 시 `status` |
+|---|---|---|
+| 역할 | `permission.roles`, `actor_types` (입력 검사보다 먼저 — 권한 없는 실행자에게 정보를 주지 않음) | `denied` |
+| 입력 | 파라미터 타입·필수·enum, object 파라미터의 객체 존재 | `invalid` |
+| 대상 잠금 | `SELECT … FOR UPDATE` — 같은 대상의 동시 실행을 줄 세움 | `invalid` (없음) |
+| 권한 조건 | `permission.check` (본인 담당 고객만 등) | `denied` |
+| 실행 조건 | `preconditions` — 실패한 규칙의 message 를 **모두** 돌려줌 | `rejected` |
+| 승인 | `approval.required_if` 가 참이면 실행하지 않고 승인 요청 저장 | `approval_required` |
+| 변경 | `edits` 순서대로. `prefixed_sequence` ID 는 advisory lock 으로 채번 | DB 오류 → `failed` (전체 롤백) |
+| 이벤트·감사 | `minionto.outbox`, `minionto.action_log` — 변경과 **같은 트랜잭션** | |
+
+- 조건식에 Function 이 있으면 `all/any/not` 을 Python 에서 나눠 평가하고, 나머지는 SQL 한 번으로 평가한다.
+- 승인자는 `approver_roles` 의 **사람**이어야 하고 요청자 본인은 승인할 수 없다(직무 분리).
+  승인 시점에 실행 조건을 다시 검사하므로, 그사이 다른 사람이 처리했으면 요청은 `expired` 가 된다.
+- 엔진 테이블은 도메인 DB의 `minionto` 스키마에 자동 생성된다. 업무 데이터와 같은 DB에 두어야
+  변경·이벤트·감사 기록을 하나의 트랜잭션으로 묶을 수 있다(Transactional Outbox, 23장).
+
+```bash
+uv run python examples/18_function_action_engine.py            # 체험 모드: 끝나면 전부 롤백
+uv run python examples/18_function_action_engine.py --commit   # 실제 반영 (되돌리기: bash scripts/load_taxos.sh)
+```
+
 ## v0.1의 제약 (의도적으로 단순화)
 
 | 제약 | 영향 | 대안 |
@@ -233,4 +291,6 @@ uv run python examples/17_object_link_engine.py --sql
 | 조건식은 비교·논리·수량·함수만 | 산술식(예: `재고 + 입고예정 <= 기준`)을 직접 쓰지 못함 | Function으로 분리 (`is_low_stock`) |
 | 링크 개수와 속성 비교 불가 | "담당 고객 수 > max_workload" 를 조건식으로 못 씀 | `count_by` 후 판단, 또는 Function (`has_capacity`) |
 | 객체 링크 접근은 매번 질의 | `for r in returns: r.customer` 는 N+1 질의 | 표가 필요하면 `rows("customer.company_name")` 로 한 번에 |
+| 승인 요청에 만료 시간이 없음 | 오래된 요청이 남음 | 21장 승인 워크플로에서 기한·알림 추가 |
+| 변경 이력(before)은 action_log 에만 | 객체별 이력 조회가 불편 | 22장 감사 로그에서 객체 이력 뷰 |
 | `pk`·`label` 등은 예약 이름 | 같은 이름의 속성은 `obj["pk"]` 로 읽음 | 검증기가 경고 |

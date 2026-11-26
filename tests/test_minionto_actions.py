@@ -146,7 +146,9 @@ def test_permission(tx):
     assert tx.actions.apply(REQ, ret, actor={"id": owner, "role": "실무자", "type": "human"}).status == "completed"
     # 역할 검사가 입력 검사보다 먼저: 권한 없는 실행자에게는 파라미터 오류도 알려주지 않는다
     res = tx.actions.apply("assign_accountant", "C0001", actor=AI_AGENT)
-    assert res.status == "denied" and "agent" in res.messages[0]
+    assert res.status == "denied" and "AI비서" in res.messages[0]
+    res = tx.actions.apply("assign_accountant", "C0001", actor={**AI_AGENT, "role": "세무사"})
+    assert res.status == "denied" and "agent" in res.messages[0]          # 역할은 맞아도 human 전용
 
 
 def test_candidates_respect_permission(tx):
