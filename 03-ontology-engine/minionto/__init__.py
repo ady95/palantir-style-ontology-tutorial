@@ -8,6 +8,6 @@ from .registry import Registry, RegistryError
 from .schema import Schema
 from .validator import Report, validate
 
-__all__ = ["ObjectSet", "OntoObject", "Ontology", "OntologyClient", "OntologyLoadError", "QueryError", "Registry", "RegistryError",
-           "Report", "Schema", "load", "validate"]
+__all__ = ["ObjectSet", "OntoObject", "Ontology", "OntologyClient", "OntologyLoadError", "QueryError",
+           "Registry", "RegistryError", "Report", "Schema", "load", "validate"]
 __version__ = "0.1.0"

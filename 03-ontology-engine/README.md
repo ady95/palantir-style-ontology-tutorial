@@ -12,7 +12,7 @@
 | 16 | 메타모델·YAML DSL·검증기 | ✅ v0.1 |
 | 17 | Object Engine · Link Engine (조회·관계 탐색) | ✅ v0.1 |
 | 18 | Function Engine · Action Engine (계산·검증된 실행·승인·감사) | ✅ v0.1 |
-| 19 | Ontology Registry · API · SDK | 예정 |
+| 19 | Ontology Registry · API · SDK (버전 관리·REST API·타입 SDK 생성) | ✅ v0.1 |
 
 ## 구조
 
@@ -27,9 +27,16 @@
 │   ├── objects.py            # OntologyClient · ObjectSet · OntoObject                    [17장]
 │   ├── functions.py          # Function Engine: 구현 로드, 입력 변환, 출력 계약 검사      [18장]
 │   ├── actions.py            # Action Engine: 권한→조건→승인→변경→Outbox·감사 (한 트랜잭션) [18장]
+│   ├── registry.py           # Ontology Registry: 버전 등록·비교(diff)·활성화·롤백             [19장]
+│   ├── describe.py           # 공개 메타데이터 (물리 매핑을 숨긴 API·SDK·에이전트용 설명)     [19장]
+│   ├── api.py                # FastAPI: 객체·링크·Function·Action·승인 엔드포인트              [19장]
+│   ├── sdk.py                # 원격 클라이언트 (httpx 만 사용, 로컬 ObjectSet 과 같은 모양)    [19장]
+│   ├── codegen.py            # SDK Generator: 메타데이터 → 타입 있는 Python SDK               [19장]
 │   ├── loader.py, cli.py
 ├── examples/17_object_link_engine.py   # PART 2 SPARQL 질문을 엔진으로 다시 풀기
 ├── examples/18_function_action_engine.py  # Action 실행·거부·승인 시나리오 (기본은 롤백)
+├── examples/19_registry_api_sdk.py        # 등록→활성화 관문→API→생성 SDK (기본은 롤백)
+├── examples/dev_api_keys.yaml             # 개발용 API 키 (토큰 → 실행자)
 ├── ontologies/               # 도메인 정의 (엔진 코드 수정 없이 교체)
 │   ├── taxos/ontology.yaml       # 세무: Object 8 · Link 10 · Function 4 · Action 4
 │   ├── taxos/functions.py        # Function 구현 (계산만, 테이블 이름 없음)
@@ -281,6 +288,101 @@ uv run python examples/18_function_action_engine.py            # 체험 모드: 
 uv run python examples/18_function_action_engine.py --commit   # 실제 반영 (되돌리기: bash scripts/load_taxos.sh)
 ```
 
+## Ontology Registry · API · SDK (19장)
+
+엔진을 **외부에 여는** 단계입니다. 정의는 Registry 에서 버전으로 관리하고, 활성 버전만 API 로 서빙하며,
+API 메타데이터로 타입이 있는 SDK 를 생성합니다.
+
+```mermaid
+flowchart LR
+  Y[ontology.yaml + functions.py] -->|register: 검증·checksum| D[draft]
+  D -->|activate: 사람·다른 사람·호환성·DB 대조| A[active]
+  A -->|이전 active| R[retired]
+  R -->|activate = 롤백| A
+  A --> API[REST API] --> SDK[생성 SDK · AI 에이전트]
+```
+
+### Registry: 등록과 반영을 나눈다
+
+```bash
+uv run python -m minionto registry register ontologies/taxos/ontology.yaml --actor A001,human
+uv run python -m minionto registry activate taxos 0.1.0 --actor A005,human    # 등록자와 다른 사람
+uv run python -m minionto registry diff taxos 0.1.0 0.2.0
+uv run python -m minionto registry history
+```
+
+| 규칙 | 이유 |
+|---|---|
+| 정의 YAML 과 Function 코드를 함께 저장, checksum 으로 식별 | 활성 버전은 디스크 파일이 바뀌어도 그대로 재현 |
+| 같은 버전 번호에 다른 내용 등록 불가 | 등록된 버전은 불변. 바꾸려면 version 을 올린다 |
+| 초안 등록은 AI 도 가능, 활성화는 **사람**이 | LLM 이 만든 업무 규칙은 사람의 검토 후에만 실행 환경에 들어간다 |
+| 등록자 본인은 draft 를 활성화할 수 없음 | 직무 분리 (18장 승인과 같은 원칙) |
+| breaking 변경은 `--allow-breaking` 이 있어야 활성화 | 기존 API·SDK 사용자 보호 |
+| 활성화 직전 DB 대조 검사 | 실제 스키마에 없는 컬럼을 가리키는 정의 차단 |
+
+변경은 **사용자에게 미치는 영향**으로 분류합니다 (`diff`, 권장 버전 `suggest_version`).
+
+| 분류 | 예 | 권장 버전 |
+|---|---|---|
+| breaking | 객체 타입·속성·링크·Action 삭제, 타입 변경, enum 값 삭제, 필수 입력 추가, 이벤트 발행 중단 | 주 버전 |
+| policy | 실행 조건·권한·승인 규칙·변경 내용 수정 (입력 형식은 같지만 **업무 규칙**이 바뀜 → 검토) | 부 버전 |
+| compatible | 객체·속성·Action 추가, 선택 입력 추가, **테이블·컬럼·조인 키 변경** | 부 버전 |
+
+물리 매핑(테이블·컬럼) 변경이 compatible 인 이유: API 는 업무 용어만 노출하므로 DB 구조를 바꿔도 사용자는 모릅니다.
+
+### API: 업무 용어로 된 엔드포인트
+
+```bash
+uv run python -m minionto serve ontologies/taxos/ontology.yaml ontologies/northwind/ontology.yaml     --keys examples/dev_api_keys.yaml --today 2027-01-18          # 개발: 파일을 바로 서빙
+uv run python -m minionto serve --registry --keys examples/dev_api_keys.yaml   # 운영: 활성 버전만
+# 문서: http://127.0.0.1:8800/docs (OpenAPI)
+```
+
+| 메서드·경로 (`/v1/ontologies/{o}` 아래) | 내용 |
+|---|---|
+| `GET /` | 공개 메타데이터 — 객체·속성·링크·Function·Action(권한·승인·실행 조건). 테이블·컬럼·구현 위치는 없음 |
+| `POST /objects/{type}/search` | `where`·`steps`(조건/pivot 순서)·`order_by`·`select`·`limit`·`offset` |
+| `POST /objects/{type}/aggregate` | `count_by`, `metrics` |
+| `GET /objects/{type}/{pk}`, `…/{pk}/links/{link}` | 객체 하나, 링크 따라가기 |
+| `POST /functions/{fn}` | `{"args": {...}}` |
+| `GET /actions/{a}/candidates` | **토큰의 실행자**가 실행할 수 있는 대상 |
+| `POST /actions/{a}/apply` | `{"target", "params", "dry_run"}` → 200 completed · 202 approval_required · 403 denied · 409 rejected · 422 invalid |
+| `GET /approvals`, `POST /approvals/{id}/decide` | 내 역할이 처리할 승인 요청 |
+
+```bash
+curl -s -H "Authorization: Bearer dev-ai-agent" -H "Content-Type: application/json"   -d '{"where":[{"field":"status","op":"eq","value":"자료수집중"}],"select":["return_id","due_date"],"limit":2}'   http://127.0.0.1:8800/v1/ontologies/taxos/objects/TaxReturn/search
+```
+
+- 실행자(actor)는 **토큰에서** 정합니다. 본문에 `actor` 를 넣어도 무시됩니다. 개발용 키는 20장에서 실제 인증으로 바꿉니다.
+- 금액(decimal)은 정밀도를 지키려고 문자열(`"440.00"`)로 보냅니다.
+
+### SDK: 메타데이터 → 타입 있는 클라이언트
+
+```bash
+uv run python -m minionto sdk ontologies/taxos/ontology.yaml -o build/taxos_sdk.py
+uv run python -m minionto sdk --url http://127.0.0.1:8800 --ontology northwind --token dev-nw-sales -o build/northwind_sdk.py
+```
+
+```python
+from taxos_sdk import TaxosClient
+sdk = TaxosClient("http://127.0.0.1:8800", token="dev-ai-agent")
+sdk.check_version()                                         # 주 버전이 다르면 오류 → SDK 재생성
+rows = sdk.TaxReturn.where(status="자료수집중").order_by("due_date").limit(5).all()   # list[TaxReturn]
+rows[0].due_date                                            # datetime.date
+sdk.TaxReturn.where(return_id="R00006").pivot("customer").first()                   # Customer
+sdk.request_missing_documents("R00006", note="기한 전 제출 부탁드립니다", dry_run=True)
+```
+
+- 객체 타입마다 dataclass (enum → `Literal`, date·decimal 변환). `from_dict` 는 모르는 키를 무시하므로
+  서버에 속성이 추가돼도(compatible) 기존 SDK 가 깨지지 않습니다.
+- Action 메서드 독스트링에 권한·승인·실행 조건이 들어가 에디터와 AI 코딩 도구가 그대로 읽습니다.
+- 생성 SDK 는 `minionto.sdk`(httpx 만 사용)에 의존하며, 타입 없이 쓰려면 `RemoteOntology` 를 바로 씁니다.
+
+```bash
+uv run python examples/19_registry_api_sdk.py            # Registry·API·SDK 한 번에 (전부 롤백)
+uv run python examples/19_registry_api_sdk.py --commit   # Registry 등록·활성화만 남김
+```
+
 ## v0.1의 제약 (의도적으로 단순화)
 
 | 제약 | 영향 | 대안 |
@@ -294,3 +396,7 @@ uv run python examples/18_function_action_engine.py --commit   # 실제 반영 (
 | 승인 요청에 만료 시간이 없음 | 오래된 요청이 남음 | 21장 승인 워크플로에서 기한·알림 추가 |
 | 변경 이력(before)은 action_log 에만 | 객체별 이력 조회가 불편 | 22장 감사 로그에서 객체 이력 뷰 |
 | `pk`·`label` 등은 예약 이름 | 같은 이름의 속성은 `obj["pk"]` 로 읽음 | 검증기가 경고 |
+| API 키는 개발용 고정 파일 | 키 회전·만료·권한 범위 없음 | 20장 인증·정책 엔진 |
+| API 는 요청마다 DB 연결을 새로 엶 | 동시 요청이 많으면 연결 비용 | 커넥션 풀(psycopg_pool) |
+| Registry 는 활성 버전 하나만 서빙 | 버전별 API 동시 제공(`/v1`, `/v2`) 불가 | 서버 재시작으로 전환, 이후 버전 라우팅 |
+| Registry 활성화는 서버를 다시 띄워야 반영 | 실행 중 정의 교체 없음 | 활성화 이벤트 구독 후 재적재 |
