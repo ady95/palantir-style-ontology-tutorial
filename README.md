@@ -39,14 +39,16 @@ PostgreSQL + Python 기반 오픈소스로 직접 구현하고 AI 에이전트�
 
 ```bash
 cp .env.example .env        # API 주소·모델·DB 포트 설정
-docker compose up -d        # PostgreSQL 기동 (최초 1회 Northwind 자동 적재)
-bash scripts/check_db.sh    # 적재 확인
+docker compose up -d        # PostgreSQL 기동 (최초 1회 Northwind·세무 합성 데이터 자동 적재)
+bash scripts/check_db.sh    # Northwind 적재 확인
+bash scripts/load_taxos.sh  # 세무 합성 데이터 (재)적재 + 행 수 확인
 ```
 
 | 데이터베이스 | 용도 |
 |---|---|
 | `ontology` | 온톨로지 엔진 메타데이터·업무 상태·감사 로그 |
 | `northwind` | Northwind 샘플 데이터 ([datasets/northwind](datasets/northwind/)) |
+| `taxos` | 세무 사무소 합성 데이터 ([datasets/taxos](datasets/taxos/)) |
 
 기본 포트는 `5434`입니다. 이미 사용 중이면 `.env`의 `POSTGRES_PORT`를 바꾸세요.
 
