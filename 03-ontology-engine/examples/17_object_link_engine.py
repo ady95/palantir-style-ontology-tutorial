@@ -97,7 +97,7 @@ def northwind() -> None:
         print("분류별:", [(r["category.category_name"], r["count"]) for r in products.count_by("category.category_name")][:4])
 
         fuller = nw.objects("Employee").where(last_name="Fuller")
-        print("Fuller 의 직속 부하:", [e.title for e in fuller.pivot("direct_reports")])     # 자기 참조 링크
+        print("Fuller 의 직속 부하:", [(e.last_name, e.title) for e in fuller.pivot("direct_reports")])  # 자기 참조
         late = nw.objects("Order").where({"field": "shipped_date", "op": "gt", "value": "$target.required_date"})
         print(f"납기보다 늦게 출고된 주문: {late.count()}건,",
               "운송비 합계", late.aggregate(total=("sum", "freight"))["total"])

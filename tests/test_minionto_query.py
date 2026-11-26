@@ -183,6 +183,8 @@ def test_northwind_links(nw):
     expected = raw(nw, f"SELECT count(*) n FROM employees WHERE reports_to = {fuller.pk}")[0]["n"]
     assert len(reports) == expected > 0
     assert all(e.manager == fuller for e in reports)
+    # 업무 속성 'title'(직함)이 엔진 기능 이름에 가려지지 않는다
+    assert fuller.title == fuller["title"] != fuller.label
     germany = nw.objects("Customer").where(country="Germany").pivot("orders").pivot("products").count()
     expected = raw(nw, """SELECT count(DISTINCT d.product_id) n FROM order_details d
                           JOIN orders o USING (order_id) JOIN customers c USING (customer_id)

@@ -27,6 +27,7 @@ from .loader import load
 from .metamodel import Condition, LinkQuantifier, Ontology
 from .query import Bindings, Compiler, QueryError, Scope, coerce
 from .schema import LinkEnd, Schema
+from .validator import RESERVED_NAMES
 
 AGGREGATES = {"count", "sum", "avg", "min", "max"}
 
@@ -282,7 +283,11 @@ class OntoObject:
         ret.status                    속성
         ret.customer                  단일 값 링크 → OntoObject (없으면 None)
         ret.submissions               여러 값 링크 → ObjectSet (추가 조건을 이어 붙일 수 있음)
+
+    예약 이름(pk, label, object_type, properties, link, to_dict)과 같은 이름의 속성은
+    obj["이름"] 으로 읽는다. 엔진 기능과 업무 속성 이름이 부딪히지 않게 하기 위함이다.
     """
+    RESERVED = frozenset(RESERVED_NAMES)
 
     __slots__ = ("_client", "object_type", "properties")
 
@@ -300,7 +305,8 @@ class OntoObject:
         return self.properties[self._def.source.primary_key]
 
     @property
-    def title(self) -> Any:
+    def label(self) -> Any:
+        """title_property 값 (사람이 알아보는 이름)"""
         return self.properties.get(self._def.title_property)
 
     def link(self, name: str) -> ObjectSet:
@@ -329,7 +335,7 @@ class OntoObject:
         return hash((self.object_type, self.pk))
 
     def __repr__(self) -> str:
-        return f"{self.object_type}({self.pk} {self.title!r})"
+        return f"{self.object_type}({self.pk} {self.label!r})"
 
     def to_dict(self) -> dict[str, Any]:
         return {"$type": self.object_type, "$pk": self.pk, **self.properties}

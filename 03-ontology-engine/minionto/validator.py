@@ -19,6 +19,8 @@ from .schema import PathError, Schema
 
 ACTOR_FIELDS = {"id", "role", "type"}
 SPECIAL_REFS = {"$now", "$today"}
+# OntoObject(objects.py)가 엔진 기능에 쓰는 이름
+RESERVED_NAMES = {"pk", "label", "object_type", "properties", "link", "to_dict"}
 
 
 @dataclass
@@ -84,6 +86,9 @@ class Validator:
 
             columns: dict[str, str] = {}
             for pname, prop in props.items():
+                if pname in RESERVED_NAMES:
+                    self.r.warning(f"{p}.properties.{pname}",
+                                   f"'{pname}' 은 객체 API의 예약 이름입니다. obj[\"{pname}\"] 으로 읽어야 합니다")
                 col = prop.column or pname
                 if col in columns:
                     self.r.error(f"{p}.properties.{pname}", f"컬럼 '{col}' 을 '{columns[col]}' 과 함께 씁니다")

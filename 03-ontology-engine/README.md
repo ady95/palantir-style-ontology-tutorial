@@ -10,7 +10,7 @@
 | 장 | 구성 요소 | 상태 |
 |---|---|---|
 | 16 | 메타모델·YAML DSL·검증기 | ✅ v0.1 |
-| 17 | Object Engine · Link Engine (조회·관계 탐색) | 예정 |
+| 17 | Object Engine · Link Engine (조회·관계 탐색) | ✅ v0.1 |
 | 18 | Function Engine · Action Engine | 예정 |
 | 19 | Ontology Registry · API · SDK | 예정 |
 
@@ -23,7 +23,10 @@
 │   ├── schema.py             # 링크 색인, 경로 해석 (customer.accountant.max_workload)
 │   ├── validator.py          # 참조 무결성 검사
 │   ├── db.py                 # 실제 PostgreSQL 스키마 대조
+│   ├── query.py              # 조건식 → SQL 컴파일러 (경로 → JOIN, some/none → EXISTS)   [17장]
+│   ├── objects.py            # OntologyClient · ObjectSet · OntoObject                    [17장]
 │   ├── loader.py, cli.py
+├── examples/17_object_link_engine.py   # PART 2 SPARQL 질문을 엔진으로 다시 풀기
 ├── ontologies/               # 도메인 정의 (엔진 코드 수정 없이 교체)
 │   ├── taxos/ontology.yaml       # 세무: Object 8 · Link 10 · Function 4 · Action 4
 │   └── northwind/ontology.yaml   # 주문·재고: Object 7 · Link 7 · Function 2
@@ -157,6 +160,69 @@ Action은 **코드가 아니라 선언**이다. 무엇을 확인하고(precondit
 언제 사람이 개입하고(approval), 무엇을 바꾸는지(edits)를 한곳에 적는다.
 사람·웹 화면·AI 에이전트가 모두 이 정의를 거쳐 실행하므로, 규칙을 도구마다 따로 구현하지 않아도 된다.
 
+---
+
+## Object Engine · Link Engine (17장)
+
+테이블·컬럼·조인 키를 몰라도 **객체·속성·링크 이름**으로 조회한다.
+
+```python
+from minionto import OntologyClient
+
+onto = OntologyClient.open("ontologies/taxos/ontology.yaml", today="2027-01-18")
+
+# 집합 정의 — 실행 전까지 DB를 읽지 않는다 (where 는 AND 로 쌓인다)
+returns = (onto.objects("TaxReturn")
+           .where(status="자료수집중")                                   # 속성=값
+           .where({"field": "customer.risk_level", "op": "eq", "value": "높음"})   # 링크 경로
+           .where({"some": {"link": "submissions",
+                            "where": {"field": "status", "op": "eq", "value": "미요청"}}})
+           .order_by("due_date", "-customer.risk_level"))
+
+print(returns.sql())                                # 생성된 SQL
+returns.count(); returns.first(); returns.limit(10).all()
+returns.rows("return_id", "customer.company_name", "customer.accountant.name")   # 표 조회
+returns.count_by("customer.accountant.name")        # 그룹별 개수
+onto.objects("Customer").pivot("tax_returns")        # 집합 단위 링크 이동 (Search Around)
+
+r = returns.first()
+r.customer.accountant.name                           # 단일 값 링크 → 객체
+r.submissions.where(status="미요청").all()          # 여러 값 링크 → ObjectSet
+```
+
+```bash
+uv run python -m minionto query ontologies/taxos/ontology.yaml Accountant \
+    -w accountant_id=A002 -p customers -w risk_level=높음 --select customer_id,risk_level -v
+uv run python examples/17_object_link_engine.py --sql
+```
+
+### 번역 규칙
+
+| 온톨로지 표현 | SQL |
+|---|---|
+| 속성 `status` | `t0.status` (속성명 ≠ 컬럼명이면 매핑: `business_status` → `status`) |
+| 단일 값 경로 `customer.accountant.name` | `LEFT JOIN` (같은 경로는 한 번만 조인) |
+| `some` / `none` | 상관 `EXISTS` / `NOT EXISTS` |
+| 다대다 링크 | 연결 테이블(through)을 거치는 `EXISTS` |
+| `pivot(link)` | 도착 타입 기준 `EXISTS(역방향 링크 → 원래 조건)` |
+| `$target.<경로>` | 대상 객체의 다른 속성과 비교 (`shipped_date > $target.required_date`) |
+| enum 정렬 | 정의한 값 순서 (`낮음 < 보통 < 높음`), 가나다순 아님 |
+
+- 여러 값 링크를 비교·정렬에 쓰면 오류: 결과 행이 중복되거나 뜻이 모호해지기 때문 → `some`/`none`/`pivot`
+- `ne` 는 `IS DISTINCT FROM`, `not` 은 `NOT COALESCE(…, FALSE)` — NULL 이 섞여도 '아니다'가 참
+- 값은 `sql.Literal` 로 넣어 SQL 인젝션이 생기지 않고, enum 은 허용 값인지 먼저 확인한다
+- Function 조건은 SQL로 바꾸지 않는다 (18장 Function Engine이 Python에서 평가)
+
+### PART 2(SPARQL)와 결과 대조
+
+| 질문 | SPARQL (PART 2) | MiniOnto (17장) |
+|---|---|---|
+| 기한 임박 + 자료 미제출 고객 | 92명 | 92명 |
+| 자료 현황 미등록 현재 신고 | 6건 | 6건 |
+| 업무량 한도 초과 담당자 | A002, A003 | A002, A003 |
+
+같은 의미 모델을 RDF 그래프에서 묻든 운영 DB에서 묻든 답이 같다.
+
 ## v0.1의 제약 (의도적으로 단순화)
 
 | 제약 | 영향 | 대안 |
@@ -165,3 +231,6 @@ Action은 **코드가 아니라 선언**이다. 무엇을 확인하고(precondit
 | 링크에 속성이 없음 | 주문-상품 링크의 수량·단가를 링크에서 읽지 못함 | `order_total` Function에서 계산 |
 | 하나의 데이터베이스(datasource) | 여러 DB를 걸친 객체는 정의 불가 | 이후 Data Integration 단계에서 다룸 |
 | 조건식은 비교·논리·수량·함수만 | 산술식(예: `재고 + 입고예정 <= 기준`)을 직접 쓰지 못함 | Function으로 분리 (`is_low_stock`) |
+| 링크 개수와 속성 비교 불가 | "담당 고객 수 > max_workload" 를 조건식으로 못 씀 | `count_by` 후 판단, 또는 Function (`has_capacity`) |
+| 객체 링크 접근은 매번 질의 | `for r in returns: r.customer` 는 N+1 질의 | 표가 필요하면 `rows("customer.company_name")` 로 한 번에 |
+| `pk`·`label` 등은 예약 이름 | 같은 이름의 속성은 `obj["pk"]` 로 읽음 | 검증기가 경고 |
