@@ -67,10 +67,11 @@ def actions(onto: OntologyClient) -> None:
     print(eng.decide(pending.approval_id, STAFF_A003))       # 실무자는 승인자가 아니다
     print(eng.decide(pending.approval_id, TAX_ACCOUNTANT, comment="확인함"))
 
-    title("6. Function 을 쓰는 실행 조건: 담당자 배정")
-    cust = onto.objects("Customer").where(accountant_id="A004", business_status="영업").order_by("customer_id").first()
-    print(eng.apply("assign_accountant", cust, actor=TAX_ACCOUNTANT, params={"accountant": "A002"}))
+    title("6. Function 을 쓰는 실행 조건: 업무량이 넘친 담당자(A002)의 고객 재배정")
+    cust = onto.objects("Customer").where(accountant_id="A002", business_status="영업").order_by("customer_id").first()
+    print(eng.apply("assign_accountant", cust, actor=TAX_ACCOUNTANT, params={"accountant": "A003"}))
     best = onto.functions.call("recommend_assignee", customer=cust)
+    print("추천 담당자:", best)
     print(eng.apply("assign_accountant", cust, actor=AI_AGENT, params={"accountant": best}))
     print(eng.apply("assign_accountant", cust, actor=TAX_ACCOUNTANT, params={"accountant": best}))
 

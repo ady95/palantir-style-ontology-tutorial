@@ -122,7 +122,9 @@ class ActionResult:
     def __str__(self) -> str:
         head = f"[{self.status}{' · dry-run' if self.dry_run else ''}] {self.action}({self.target})"
         lines = [head] + [f"  - {m}" for m in self.messages]
-        lines += [f"  * {c['op']} {c['object_type']}({c['pk']}) {c.get('after', '')}" for c in self.changes]
+        for c in self.changes:
+            after = ", ".join(f"{k}={v}" for k, v in c["after"].items() if k != "created_at")
+            lines.append(f"  * {c['op']} {c['object_type']}({c['pk']}) {after}")
         if self.events:
             lines.append(f"  → 이벤트 {', '.join(self.events)}")
         return "\n".join(lines)
@@ -168,6 +170,7 @@ class ActionEngine:
             with self.conn.transaction(force_rollback=dry_run):
                 try:
                     actor = self._check_actor(actor)
+                    self._check_role(act, actor)                 # 권한 없는 실행자에게는 입력 오류도 알려주지 않는다
                     params_ = self._check_params(act, params_in)
                     target_set = self._lock_target(act, target, params_, actor)
                     self._check_permission(act, target_set, params_, actor)
@@ -260,7 +263,8 @@ class ActionEngine:
         return (self.client.objects(act.target).where(**{ot.source.primary_key: pk})
                 .bind(**params).as_actor(actor))
 
-    def _check_permission(self, act: Action, ts: ObjectSet, params: dict, actor: dict) -> None:
+    @staticmethod
+    def _check_role(act: Action, actor: dict) -> None:
         perm = act.permission
         if actor["role"] not in perm.roles:
             raise ActionStop("denied", [f"역할 '{actor['role']}' 은 이 Action 을 실행할 수 없습니다 "
@@ -268,6 +272,9 @@ class ActionEngine:
         if actor["type"] not in perm.actor_types:
             raise ActionStop("denied", [f"'{actor['type']}' 실행자는 이 Action 을 실행할 수 없습니다 "
                                         f"(허용: {', '.join(perm.actor_types)})"])
+
+    def _check_permission(self, act: Action, ts: ObjectSet, params: dict, actor: dict) -> None:
+        perm = act.permission
         if perm.check and not self.evaluate(perm.check, ts, params, actor):
             raise ActionStop("denied", ["권한 조건을 만족하지 않습니다 (예: 본인 담당 고객이 아님)"])
 
@@ -299,7 +306,7 @@ class ActionEngine:
         if raw == "$today":
             return self.client.today or date.today()
         if raw == "$now":
-            return datetime.now()
+            return self.client.now()
         head, _, name = raw.partition(".")
         if head == "$params":
             return params.get(name)

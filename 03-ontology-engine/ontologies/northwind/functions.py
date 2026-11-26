@@ -13,7 +13,7 @@ def order_total(ctx, order):
     """
     row = ctx.sql("""SELECT COALESCE(SUM(unit_price * quantity * (1 - discount)), 0) AS total
                      FROM order_details WHERE order_id = %s""", (order.pk,))[0]
-    return Decimal(str(round(row["total"], 2)))
+    return Decimal(str(row["total"])).quantize(Decimal("0.01"))
 
 
 def is_low_stock(ctx, product):

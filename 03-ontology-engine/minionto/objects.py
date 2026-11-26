@@ -104,7 +104,12 @@ class OntologyClient:
 
     def bindings(self, params: dict | None = None, actor: dict | None = None) -> Bindings:
         return Bindings(actor=actor if actor is not None else self.actor, params=params or {},
-                        today=self.today, now=datetime.now())
+                        today=self.today, now=self.now())
+
+    def now(self) -> datetime:
+        """$now. 기준일(today)을 정했으면 그 날짜의 현재 시각 — 시나리오 날짜와 기록 시각을 맞춘다"""
+        now = datetime.now()
+        return datetime.combine(self.today, now.time()) if self.today else now
 
 
 def to_condition(cond: Condition | dict | None = None, **eq: Any) -> list[Condition]:
