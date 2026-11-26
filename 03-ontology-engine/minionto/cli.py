@@ -5,6 +5,10 @@
   python -m minionto query ontologies/taxos/ontology.yaml TaxReturn -w status=자료수집중 -p customer [--sql]
   python -m minionto call ontologies/taxos/ontology.yaml filing_delay_risk -a customer=C0008
   python -m minionto run ontologies/taxos/ontology.yaml request_missing_documents R00006 --actor agent-01,AI비서,agent
+  python -m minionto registry register ontologies/taxos/ontology.yaml --actor A001,human
+  python -m minionto registry activate taxos 0.1.0 --actor A005,human
+  python -m minionto serve ontologies/taxos/ontology.yaml --keys examples/dev_api_keys.yaml   (또는 --registry)
+  python -m minionto sdk ontologies/taxos/ontology.yaml -o build/taxos_sdk.py
   python -m minionto schema [-o schema/minionto.schema.json]
 """
 
@@ -185,6 +189,95 @@ def cmd_run(args) -> int:
     return 0 if result.status in ("completed", "approval_required") else 1
 
 
+def _registry_actor(text: str) -> dict:
+    parts = text.split(",")
+    if len(parts) == 2:
+        return {"id": parts[0], "type": parts[1]}
+    if len(parts) == 3:
+        return {"id": parts[0], "role": parts[1], "type": parts[2]}
+    raise SystemExit("--actor 는 '아이디,유형' 또는 '아이디,역할,유형' 형식입니다 (예: A001,human)")
+
+
+def _table(rows: list[dict]) -> None:
+    if not rows:
+        print("(없음)")
+        return
+    keys = list(rows[0])
+    print(" | ".join(keys))
+    for r in rows:
+        print(" | ".join("" if r[k] is None else str(r[k])[:19] if hasattr(r[k], "isoformat") else str(r[k])
+                         for k in keys))
+
+
+def cmd_registry(args) -> int:
+    from .registry import Registry, RegistryError
+    with Registry(args.registry_url) as reg:
+        try:
+            if args.op == "register":
+                r = reg.register(args.file, actor=_registry_actor(args.actor), notes=args.notes)
+                print(("등록" if r.created else "이미 등록됨(같은 내용)") + f": {r.version}")
+                if r.base and r.base != r.version.version:
+                    print(f"현재 활성 v{r.base} 대비 변경 {len(r.changes)}건 — 권장 버전 v{r.suggested_version}")
+                    for c in r.changes:
+                        print("  " + str(c))
+                elif not r.base:
+                    print("활성 버전이 없습니다. activate 로 반영하세요")
+            elif args.op == "activate":
+                changes = reg.activate(args.name, args.version, actor=_registry_actor(args.actor),
+                                       allow_breaking=args.allow_breaking, check_db=not args.no_db_check)
+                print(f"활성화: {args.name} v{args.version} (이전 활성 대비 변경 {len(changes)}건)")
+            elif args.op == "diff":
+                changes = reg.diff(args.name, args.old, args.new)
+                print(f"{args.name} v{args.old} → v{args.new}: 변경 {len(changes)}건")
+                for c in changes:
+                    print("  " + str(c))
+            else:
+                _table(reg.history(args.name))
+        except RegistryError as e:
+            print(f"Registry 오류: {e}")
+            return 1
+    return 0
+
+
+def cmd_serve(args) -> int:
+    import uvicorn
+
+    from .api import Served, create_app, load_api_keys
+    if args.registry:
+        from .registry import Registry
+        with Registry(args.registry_url) as reg:
+            served = [Served.from_registry(v) for v in reg.active().values()]
+    else:
+        served = [Served.from_file(f) for f in args.files]
+    if not served:
+        raise SystemExit("서빙할 온톨로지가 없습니다 (파일을 주거나 --registry 에 활성 버전을 등록하세요)")
+    for s in served:
+        print(f"  {s.name} v{s.version} ({s.origin})")
+    app = create_app(served, api_keys=load_api_keys(args.keys), today=args.today)
+    uvicorn.run(app, host=args.host, port=args.port)
+    return 0
+
+
+def cmd_sdk(args) -> int:
+    from .codegen import generate, metadata_from_file, metadata_from_url
+    if args.url:
+        if not (args.ontology and args.token):
+            raise SystemExit("--url 을 쓰면 --ontology 와 --token 도 필요합니다")
+        meta = metadata_from_url(args.url, args.ontology, args.token)
+    elif args.file:
+        meta = metadata_from_file(args.file)
+    else:
+        raise SystemExit("정의 파일 또는 --url 이 필요합니다")
+    code = generate(meta, class_name=args.class_name)
+    if args.output:
+        Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.output).write_text(code, encoding="utf-8")
+        print(f"SDK → {args.output} ({meta['name']} v{meta['version']}, {len(code.splitlines())}줄)")
+    else:
+        print(code)
+    return 0
+
+
 def cmd_schema(args) -> int:
     text = json.dumps(Ontology.model_json_schema(by_alias=True), ensure_ascii=False, indent=2)
     if args.output:
@@ -242,6 +335,47 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--today")
     sp.add_argument("--db-url")
     sp.set_defaults(func=cmd_run)
+
+    sp = sub.add_parser("registry", help="Ontology Registry: 버전 등록·비교·활성화")
+    rsub = sp.add_subparsers(dest="op", required=True)
+    r = rsub.add_parser("register", help="정의를 draft 로 등록")
+    r.add_argument("file")
+    r.add_argument("--actor", required=True, help="아이디,유형 (예: A001,human)")
+    r.add_argument("--notes")
+    r = rsub.add_parser("activate", help="버전을 운영에 반영 (retired 버전이면 롤백)")
+    r.add_argument("name")
+    r.add_argument("version")
+    r.add_argument("--actor", required=True)
+    r.add_argument("--allow-breaking", action="store_true", help="기존 사용자를 깨는 변경 허용")
+    r.add_argument("--no-db-check", action="store_true", help="DB 대조 검사 생략")
+    r = rsub.add_parser("diff", help="두 버전 비교")
+    r.add_argument("name")
+    r.add_argument("old")
+    r.add_argument("new")
+    r = rsub.add_parser("history", help="등록 이력")
+    r.add_argument("name", nargs="?")
+    for r in rsub.choices.values():
+        r.add_argument("--registry-url")
+    sp.set_defaults(func=cmd_registry)
+
+    sp = sub.add_parser("serve", help="Ontology API 서버 실행 (FastAPI)")
+    sp.add_argument("files", nargs="*", help="온톨로지 정의 파일 (개발용)")
+    sp.add_argument("--registry", action="store_true", help="Registry 의 활성 버전을 서빙")
+    sp.add_argument("--registry-url")
+    sp.add_argument("--keys", required=True, help="개발용 API 키 파일 (YAML)")
+    sp.add_argument("--host", default="127.0.0.1")
+    sp.add_argument("--port", type=int, default=8800)
+    sp.add_argument("--today")
+    sp.set_defaults(func=cmd_serve)
+
+    sp = sub.add_parser("sdk", help="타입이 있는 Python SDK 생성")
+    sp.add_argument("file", nargs="?", help="온톨로지 정의 파일")
+    sp.add_argument("--url", help="정의 파일 대신 API 서버 메타데이터 사용")
+    sp.add_argument("--ontology")
+    sp.add_argument("--token")
+    sp.add_argument("--class-name")
+    sp.add_argument("-o", "--output")
+    sp.set_defaults(func=cmd_sdk)
 
     sp = sub.add_parser("schema", help="에디터 자동완성용 JSON Schema 출력")
     sp.add_argument("-o", "--output")

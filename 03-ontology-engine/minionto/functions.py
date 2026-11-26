@@ -72,17 +72,24 @@ class FunctionEngine:
     def _module(self, module: str) -> ModuleType:
         if module in self._modules:
             return self._modules[module]
-        if self.client.base_dir is None:
-            raise FunctionError("구현 파일 위치(base_dir)를 모릅니다. OntologyClient.open(경로)로 여세요")
-        file = self.client.base_dir / (module.replace(".", "/") + ".py")
-        if not file.exists():
-            raise FunctionError(f"구현 파일이 없습니다: {file}")
         # 온톨로지마다 같은 'functions' 모듈 이름을 쓰므로 고유한 이름으로 불러온다
         name = f"_minionto_{self.client.onto.ontology.name}_{module.replace('.', '_')}"
-        spec = importlib.util.spec_from_file_location(name, file)
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[name] = mod
-        spec.loader.exec_module(mod)
+        source = self.client.function_sources.get(module)
+        if source is not None:                       # Registry 에 저장된 버전의 코드
+            mod = ModuleType(name)
+            mod.__file__ = f"<registry:{self.client.onto.ontology.name}/{module}.py>"
+            sys.modules[name] = mod
+            exec(compile(source, mod.__file__, "exec"), mod.__dict__)  # noqa: S102 — 검토·활성화된 코드만
+        else:
+            if self.client.base_dir is None:
+                raise FunctionError("구현 파일 위치(base_dir)를 모릅니다. OntologyClient.open(경로)로 여세요")
+            file = self.client.base_dir / (module.replace(".", "/") + ".py")
+            if not file.exists():
+                raise FunctionError(f"구현 파일이 없습니다: {file}")
+            spec = importlib.util.spec_from_file_location(name, file)
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules[name] = mod
+            spec.loader.exec_module(mod)
         self._modules[module] = mod
         return mod
 

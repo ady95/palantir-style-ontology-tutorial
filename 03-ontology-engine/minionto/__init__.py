@@ -4,9 +4,10 @@ from .loader import OntologyLoadError, load
 from .metamodel import Ontology
 from .objects import ObjectSet, OntologyClient, OntoObject
 from .query import QueryError
+from .registry import Registry, RegistryError
 from .schema import Schema
 from .validator import Report, validate
 
-__all__ = ["ObjectSet", "OntoObject", "Ontology", "OntologyClient", "OntologyLoadError", "QueryError",
+__all__ = ["ObjectSet", "OntoObject", "Ontology", "OntologyClient", "OntologyLoadError", "QueryError", "Registry", "RegistryError",
            "Report", "Schema", "load", "validate"]
 __version__ = "0.1.0"

@@ -37,9 +37,10 @@ class OntologyClient:
 
     def __init__(self, onto: Ontology, url: str | None = None, *,
                  today: date | str | None = None, actor: dict | None = None,
-                 base_dir: str | Path | None = None):
+                 base_dir: str | Path | None = None, function_sources: dict[str, str] | None = None):
         self.onto = onto
         self.base_dir = Path(base_dir) if base_dir else None   # functions.py 를 찾는 위치
+        self.function_sources = function_sources or {}         # 19장: Registry 에 저장된 구현 코드
         self.schema = Schema(onto)
         self._url = url                         # 생략하면 연결할 때 .env 에서 읽는다
         self.today = date.fromisoformat(today) if isinstance(today, str) else today
