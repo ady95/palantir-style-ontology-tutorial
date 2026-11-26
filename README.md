@@ -17,9 +17,9 @@ PostgreSQL + Python 기반 오픈소스로 직접 구현하고 AI 에이전트�
 
 | 디렉터리 | 내용 |
 |---|---|
-| `01-traditional-ontology/` | RDF·OWL·SPARQL·SHACL 실습 |
+| `01-traditional-ontology/` | RDF·OWL·SPARQL·SHACL 실습 (PART 2) |
 | `02-operational-ontology/` | Object·Link·Action 실습 |
-| `03-ontology-engine/` | 범용 Mini Ontology Engine 구현 및 활용 |
+| `03-ontology-engine/` | 범용 Mini Ontology Engine (MiniOnto) — 메타모델·YAML DSL·검증기 |
 | `04-security-governance/` | 권한·승인·감사 |
 | `05-agent-integration/` | MCP·LangGraph 연동 |
 | `06-hybrid-ontology/` | Semantic + Operational 하이브리드 |
