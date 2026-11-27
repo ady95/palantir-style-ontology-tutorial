@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -356,7 +356,13 @@ def create_app(served: list[Served] | dict[str, Served], *, api_keys: dict[str, 
             raise HTTPException(404, f"Action '{action}' 이 없습니다")
 
     def action_response(result) -> JSONResponse:
-        return JSONResponse(result.to_dict(), status_code=STATUS_CODES.get(result.status, 200))
+        headers = {}
+        code = STATUS_CODES.get(result.status, 200)
+        if result.status == "failed" and result.retryable:       # 22장: 일시적 실패는 503 + 다시 시도 안내
+            code, headers["Retry-After"] = 503, "1"
+        if result.replayed:
+            headers["Idempotent-Replayed"] = "true"
+        return JSONResponse(result.to_dict(), status_code=code, headers=headers)
 
     @app.get("/v1/ontologies/{ontology}/actions/{action}/candidates", tags=["actions"])
     def candidates(action: str, limit: int = 20, client: OntologyClient = Depends(client_of),
@@ -370,10 +376,13 @@ def create_app(served: list[Served] | dict[str, Served], *, api_keys: dict[str, 
 
     @app.post("/v1/ontologies/{ontology}/actions/{action}/apply", tags=["actions"])
     def apply(action: str, body: ApplyRequest, client: OntologyClient = Depends(client_of),
-              actor: dict = Depends(require("actions:apply"))):
+              actor: dict = Depends(require("actions:apply")),
+              idempotency_key: str | None = Header(None, max_length=200,
+                                                   description="같은 키로 다시 보내면 처음 응답을 돌려준다 (22장)")):
         check_action(client, action)
         return action_response(client.actions.apply(action, body.target, actor=actor, params=body.params,
-                                                    dry_run=body.dry_run, expect=body.expect))
+                                                    dry_run=body.dry_run, expect=body.expect,
+                                                    idempotency_key=idempotency_key))
 
     @app.get("/v1/ontologies/{ontology}/approvals", tags=["actions"])
     def approvals(client: OntologyClient = Depends(client_of), actor: dict = Depends(require("approvals:decide"))):

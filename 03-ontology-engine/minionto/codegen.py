@@ -186,7 +186,8 @@ def generate(meta: dict, *, class_name: str | None = None) -> str:
         req, opt = _signature(act["parameters"], meta)
         target_type = _param_type({"type": "object", "object_type": act["target"]}, meta)
         args = ", ".join(["self", f"target: {target_type}"] + req + ["*"] + opt
-                         + ["dry_run: bool = False", "expect: dict[str, Any] | None = None"])
+                         + ["dry_run: bool = False", "expect: dict[str, Any] | None = None",
+                            "idempotency_key: str | None = None"])
         w(f"    def {_method(aname)}({args}) -> ActionResponse:\n")
         perm = act["permission"]
         doc = [f"{act['display_name']} (대상: {act['target']})"]
@@ -204,7 +205,7 @@ def generate(meta: dict, *, class_name: str | None = None) -> str:
             doc.append(f"이벤트: {', '.join(act['emits'])}")
         w(_doc("\n".join(doc), "        "))
         w(f"        return self.apply({aname!r}, _pk(target), params={_args_dict(act['parameters'])}, "
-          "dry_run=dry_run, expect=expect)\n\n")
+          "dry_run=dry_run, expect=expect, idempotency_key=idempotency_key)\n\n")
     return "".join(out).rstrip() + "\n"
 
 

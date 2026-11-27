@@ -6,7 +6,7 @@
 
 ontology:
   name: taxos
-  version: 0.3.0
+  version: 0.4.0
   display_name: 세무 사무소 운영 온톨로지
   description: 고객·신고·필수 자료·업무를 객체로 정의하고, 자료 요청·담당자 배정 같은 업무를 Action으로 실행한다.
 
@@ -139,6 +139,7 @@ object_types:
       transitions:
         request_missing_documents:  { from: 미요청,          to: 요청됨 }
         record_document_submission: { from: [미요청, 요청됨], to: 제출완료 }
+        cancel_document_request:    { from: 요청됨,          to: 미요청 }   # 보상 Action (22장)
 
   Consultation:
     display_name: 상담 이력
@@ -178,6 +179,7 @@ object_types:
         complete_filing:      { from: [대기, 진행중], to: 완료 }     # 신고서검토 업무를 닫는다
         file_late:            { from: [대기, 진행중], to: 완료 }
         return_to_collection: { from: [대기, 진행중], to: 취소 }
+        cancel_document_request: { from: [대기, 진행중], to: 취소 }  # 보상 Action (22장)
 
   RiskEvent:
     display_name: 위험 이벤트
@@ -477,3 +479,30 @@ actions:
             - { field: status, op: in, value: [대기, 진행중] }
         set: { status: 완료 }
     emits: [tax_return_filed_late]
+
+  # ---- 22장: 보상 Action — 이미 커밋된 자료 요청은 롤백할 수 없으므로, 되돌리는 업무를 따로 선언한다
+  cancel_document_request:
+    display_name: 자료 요청 취소
+    description: 잘못 보낸 자료 요청을 되돌린다. 요청됨 자료를 미요청으로, 진행 중인 자료요청 업무를 취소로 바꾸고 고객에게 취소를 알린다.
+    target: TaxReturn
+    parameters:
+      reason: { type: string, description: 취소 사유 (업무 메모와 고객 안내에 남는다) }
+    preconditions:
+      - message: 자료수집중인 신고만 자료 요청을 취소할 수 있습니다.
+        check: { field: status, op: eq, value: 자료수집중 }
+      - message: 취소할 요청(요청됨 상태의 자료)이 없습니다.
+        check: { some: { link: submissions, where: { field: status, op: eq, value: 요청됨 } } }
+    permission:
+      roles: [세무사, 실무자]
+      actor_types: [human]
+    edits:
+      - update_linked: submissions
+        where: { field: status, op: eq, value: 요청됨 }
+        set: { status: 미요청, requested_at: null }
+      - update_linked: tasks
+        where:
+          all:
+            - { field: task_type, op: eq, value: 자료요청 }
+            - { field: status, op: in, value: [대기, 진행중] }
+        set: { status: 취소, note: $params.reason }
+    emits: [documents_request_cancelled]

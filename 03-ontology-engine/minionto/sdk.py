@@ -65,6 +65,10 @@ class ActionResponse:
     execution_id: str = ""
     object_type: str = ""
     transitions: list[dict] = field(default_factory=list)      # 20장 (이전 서버는 보내지 않음)
+    retryable: bool = False                                     # 22장
+    error_code: str | None = None
+    attempts: int = 1
+    replayed: bool = False
 
     @property
     def ok(self) -> bool:
@@ -253,12 +257,15 @@ class RemoteOntology:
         return [Record(r) for r in self.get(f"actions/{action}/candidates", limit=limit)["data"]]
 
     def apply(self, action: str, target: Any, *, params: dict | None = None,
-              dry_run: bool = False, expect: dict | None = None) -> ActionResponse:
+              dry_run: bool = False, expect: dict | None = None,
+              idempotency_key: str | None = None) -> ActionResponse:
+        """idempotency_key 를 주면 네트워크 오류로 다시 보내도 한 번만 실행된다 (22장)"""
         body = {"target": target, "params": params or {}, "dry_run": dry_run}
         if expect:
             body["expect"] = expect
-        r = self.http.post(f"{self.prefix}/actions/{action}/apply", json=body)
-        body = self._check(r, ok=(200, 202, 403, 409, 422, 500))
+        headers = {"Idempotency-Key": idempotency_key} if idempotency_key else {}
+        r = self.http.post(f"{self.prefix}/actions/{action}/apply", json=body, headers=headers)
+        body = self._check(r, ok=(200, 202, 403, 409, 422, 500, 503))
         if "status" not in body:                         # Action 결과가 아닌 오류 (예: 404)
             raise SDKError(r.status_code, body)
         return ActionResponse.from_dict(body)

@@ -197,8 +197,13 @@ def cmd_run(args) -> int:
     with OntologyClient.open(args.file, args.db_url, today=args.today) as client:
         result = client.actions.apply(args.action, args.target, actor=_actor(args.actor),
                                       params=_kv(args.arg), dry_run=not args.commit,
-                                      expect=_kv(args.expect) or None)
+                                      expect=_kv(args.expect) or None,
+                                      idempotency_key=args.idempotency_key, retries=args.retries)
     print(result)
+    if result.replayed:
+        print("(멱등 키: 실행하지 않고 처음 결과를 돌려줌)")
+    if result.attempts > 1:
+        print(f"(시도 {result.attempts}회)")
     if not args.commit and result.ok:
         print("(dry-run: 반영하려면 --commit)")
     return 0 if result.status in ("completed", "approval_required") else 1
@@ -490,6 +495,8 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--commit", action="store_true", help="실제로 반영 (생략하면 미리보기 후 롤백)")
     sp.add_argument("--expect", action="append", metavar="KEY=VALUE",
                     help="읽어 둔 값 (예: status=검토중). 그사이 바뀌었으면 실행하지 않음")
+    sp.add_argument("--idempotency-key", help="멱등 키: 같은 키로 다시 실행하면 처음 결과를 돌려줌 (22장)")
+    sp.add_argument("--retries", type=int, default=0, help="일시적 실패 시 다시 시도할 횟수 (22장)")
     sp.add_argument("--today")
     sp.add_argument("--db-url")
     sp.set_defaults(func=cmd_run)

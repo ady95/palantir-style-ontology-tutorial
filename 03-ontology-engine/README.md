@@ -15,6 +15,7 @@
 | 19 | Ontology Registry · API · SDK (버전 관리·REST API·타입 SDK 생성) | ✅ v0.1 |
 | 20 | 상태 머신 · 상태 전이 강제 · 동시 변경 감지 · 지금 가능한 Action 조회 | ✅ v0.1 |
 | 21 | 토큰 인증(JWT·scope) · 행·속성 권한 정책 · 정책 판단 기록 · 승인 기한·미리보기·알림 | ✅ v0.1 |
+| 22 | 잠금 대기 시간 · 멱등 키 · 승인 요청 중복 방지 · 오류 분류와 자동 재시도 · 보상 Action | ✅ v0.1 |
 
 > 세무 정의(taxos)는 장이 진행되며 버전이 오릅니다. 각 장 원고의 출력은 그 장의 태그 기준입니다.
 >
@@ -22,7 +23,8 @@
 > |---|---|---|
 > | `part4` | 15~19장 | v0.1.0 |
 > | `ch20` | 20장 | v0.2.0 (상태 머신, Action 4개 추가) |
-> | `main` | 21장~ | v0.3.0 (보안 정책, 승인 기한) |
+> | `ch21` | 21장 | v0.3.0 (보안 정책, 승인 기한) |
+> | `main` | 22장~ | v0.4.0 (보상 Action) |
 
 ## 구조
 
@@ -52,9 +54,10 @@
 ├── examples/19_registry_api_sdk.py        # 등록→활성화 관문→API→생성 SDK (기본은 롤백)
 ├── examples/20_state_transitions.py       # 지금 가능한 Action → 신고 업무 상태 전이 → 동시 변경 감지
 ├── examples/21_security_hitl.py           # 토큰 인증 → 역할별 조회 → 정책 위반 차단 → 승인 워크플로
+├── examples/22_reliability.py             # 잠금 시간 초과·재시도 → 멱등 키 → 중복 방지 → 오류 분류 → 보상
 ├── examples/dev_api_keys.yaml             # 개발용 API 키 (토큰 → 실행자)
 ├── ontologies/               # 도메인 정의 (엔진 코드 수정 없이 교체)
-│   ├── taxos/ontology.yaml       # 세무 v0.3.0: Object 8 · Link 10 · Function 4 · Action 8 · 상태 머신 3 · 정책 2
+│   ├── taxos/ontology.yaml       # 세무 v0.4.0: Object 8 · Link 10 · Function 4 · Action 9 · 상태 머신 3 · 정책 2
 │   ├── taxos/functions.py        # Function 구현 (계산만, 테이블 이름 없음)
 │   └── northwind/ontology.yaml   # 주문·재고: Object 7 · Link 7 · Function 2
 └── schema/minionto.schema.json   # 에디터 자동완성용 JSON Schema
@@ -489,6 +492,36 @@ uv run python -m minionto decisions ontologies/taxos/ontology.yaml
 uv run python examples/21_security_hitl.py
 ```
 
+## 트랜잭션 · 멱등성 · 오류 복구 (22장)
+
+```python
+onto.actions.lock_timeout = "5s"          # 다른 실행이 잡은 잠금을 이 시간까지만 기다림 (기본 5s)
+res = onto.actions.apply("request_missing_documents", "R00006", actor=AI,
+                         idempotency_key="req-20270118-0001",   # 같은 키로 다시 보내면 처음 응답 (replayed=True)
+                         retries=3)                              # retryable 실패만 처음부터 다시 (간격 0.2·0.4·0.8초)
+res.retryable, res.error_code, res.attempts, res.replayed
+onto.actions.purge_idempotency_keys("1d")  # 오래된 멱등 키 정리
+```
+
+| 결과 | retryable | 예 |
+|---|---|---|
+| failed | True | 잠금 시간 초과(55P03), 교착(40P01), 직렬화 실패(40001), 연결 끊김 — API 503 + Retry-After |
+| failed | False | 제약 위반(23514 등), 프로그램 오류 — API 500 |
+| rejected | True | 동시 변경 감지 (20장) |
+| rejected·denied·invalid | False | 업무 규칙·권한·입력 — 같은 입력이면 같은 결과 |
+
+- 멱등 키는 Action 과 같은 트랜잭션에서 `minionto.idempotency_keys` 에 선점한다. 실패(롤백)하면 키도 남지 않아 다시 시도할 수 있고,
+  같은 키의 동시 요청은 첫 트랜잭션이 끝날 때까지 기다린다. 같은 키로 다른 요청을 보내면 invalid.
+- API 는 `Idempotency-Key` 헤더를 받고, 재생한 응답에는 `Idempotent-Replayed: true` 를 붙인다.
+- 같은 대상·같은 입력의 승인 요청이 기한 안에서 대기 중이면 새로 만들지 않는다 (업무 규칙에 의한 중복 방지).
+- 커밋된 실행은 엔진이 자동으로 되돌리지 않는다. 되돌리기도 업무 Action 으로 선언한다 (`cancel_document_request`).
+
+```bash
+uv run python -m minionto run ontologies/taxos/ontology.yaml request_missing_documents R00006 \
+  --actor agent-01,AI비서,agent --idempotency-key req-1 --retries 3 --commit
+uv run python examples/22_reliability.py
+```
+
 ## v0.1의 제약 (의도적으로 단순화)
 
 | 제약 | 영향 | 대안 |
@@ -507,6 +540,8 @@ uv run python examples/21_security_hitl.py
 | 토큰은 공유 비밀키(HS256)로 직접 발급 | 키가 새면 모든 토큰을 위조할 수 있음, 토큰 폐기 목록 없음 | 사내 인증 서버(OIDC)의 RS256 서명 + JWKS 검증 |
 | 행 정책은 결과 타입에만 적용 | 링크 경로 조건(some/none)으로 범위 밖 객체의 존재를 추론할 여지 | 경로마다 정책 적용, 집계 최소 건수 |
 | 개수 조회(count)는 조회 기록에 남기지 않음 | AI 가 집계로 얻은 정보는 기록되지 않음 | 집계 기록 추가 |
+| 멱등 키 재생은 저장한 응답 그대로 | 첫 요청 뒤 상태가 바뀌어도 같은 응답을 돌려줌 | 응답에 replayed 표시, 최신 상태는 다시 조회 |
+| 보상 Action 은 대상 전체를 되돌림 | 자료 요청 취소는 그 신고의 '요청됨' 자료를 모두 미요청으로 | 원래 실행(execution_id)을 입력으로 받아 그 변경만 되돌리기 |
 | API 는 요청마다 DB 연결을 새로 엶 | 동시 요청이 많으면 연결 비용 | 커넥션 풀(psycopg_pool) |
 | Registry 는 활성 버전 하나만 서빙 | 버전별 API 동시 제공(`/v1`, `/v2`) 불가 | 서버 재시작으로 전환, 이후 버전 라우팅 |
 | Registry 활성화는 서버를 다시 띄워야 반영 | 실행 중 정의 교체 없음 | 활성화 이벤트 구독 후 재적재 |

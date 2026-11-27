@@ -21,18 +21,23 @@ dry_run=True 이면 전 과정을 실행한 뒤 롤백한다 (AI 에이전트의
 check()·available() 은 변경 없이 '지금 실행하면 어떻게 되는지'만 알려 준다 (20장).
 21장: 대상이 실행자의 조회 범위(행 정책) 밖이면 denied. 승인 요청에는 변경 미리보기·기한·알림 이벤트가
 붙고, 승인 후 실제 변경이 미리보기와 다르면 실행하지 않는다.
+22장: 잠금 대기 시간(lock_timeout), 멱등 키(같은 요청은 저장된 응답을 재생), 오류 분류(retryable)와
+자동 재시도(retries). 멱등 키는 변경과 같은 트랜잭션에 기록되므로 실패하면 키도 남지 않아 다시 시도할 수 있다.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import time
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
+import psycopg
 from psycopg import sql
 from psycopg.types.json import Jsonb
 
@@ -117,6 +122,22 @@ CREATE TABLE IF NOT EXISTS {ENGINE_SCHEMA}.policy_decisions (
     detail       jsonb NOT NULL DEFAULT '{{}}',
     created_at   timestamptz NOT NULL DEFAULT clock_timestamp()
 );
+-- 멱등 키 (22장): 같은 실행자가 같은 키로 보낸 요청은 한 번만 실행하고, 다시 오면 저장한 응답을 돌려준다
+CREATE TABLE IF NOT EXISTS {ENGINE_SCHEMA}.idempotency_keys (
+    actor_id         text NOT NULL,
+    key              text NOT NULL,
+    request_hash     text NOT NULL,
+    action           text NOT NULL,
+    target_pk        text NOT NULL,
+    execution_id     uuid NOT NULL,
+    response         jsonb,
+    replays          integer NOT NULL DEFAULT 0,
+    created_at       timestamptz NOT NULL DEFAULT clock_timestamp(),
+    last_replayed_at timestamptz,
+    PRIMARY KEY (actor_id, key)
+);
+-- 실패 분류 (22장)
+ALTER TABLE {ENGINE_SCHEMA}.action_log ADD COLUMN IF NOT EXISTS error jsonb;
 -- 승인 워크플로 (21장): 기한과 변경 미리보기
 ALTER TABLE {ENGINE_SCHEMA}.approval_requests ADD COLUMN IF NOT EXISTS expires_at timestamptz;
 ALTER TABLE {ENGINE_SCHEMA}.approval_requests ADD COLUMN IF NOT EXISTS preview jsonb NOT NULL DEFAULT '[]';
@@ -146,10 +167,27 @@ class ActionStop(Exception):
 
 class StateConflict(Exception):
     """변경 도중 발견한 상태 문제 — 허용되지 않은 전이, 다른 트랜잭션의 동시 변경.
-    이미 일부 변경을 했을 수 있으므로 ActionStop 과 달리 트랜잭션 전체를 롤백한다 (결과는 rejected)."""
-    def __init__(self, messages: list[str]):
+    이미 일부 변경을 했을 수 있으므로 ActionStop 과 달리 트랜잭션 전체를 롤백한다 (결과는 rejected).
+    retryable: 동시 변경처럼 다시 시도하면 될 수 있는 경우 True (22장)"""
+    def __init__(self, messages: list[str], retryable: bool = False):
         super().__init__("; ".join(messages))
-        self.messages = messages
+        self.messages, self.retryable = messages, retryable
+
+
+class _Replay(Exception):
+    """같은 멱등 키의 요청 — 실행하지 않고 저장된 응답을 돌려준다"""
+    def __init__(self, result: ActionResult):
+        self.result = result
+
+
+def classify(e: Exception) -> tuple[bool, str]:
+    """시스템 오류 분류 (22장): (다시 시도하면 될 수 있는가, 오류 코드)
+
+    - 잠금 시간 초과·교착 상태·직렬화 실패·연결 끊김 → 일시적 (retryable)
+    - 제약 위반 등 데이터·정의 문제, 프로그램 오류 → 영구적 (같은 입력이면 다시 해도 같은 결과)
+    """
+    code = getattr(e, "sqlstate", None) or type(e).__name__
+    return isinstance(e, psycopg.OperationalError), code
 
 
 @dataclass
@@ -165,6 +203,10 @@ class ActionResult:
     approval_id: str | None = None
     dry_run: bool = False
     transitions: list[dict] = field(default_factory=list)     # 20장: 이 실행이 일으킨 상태 전이
+    retryable: bool = False                 # 22장: 다시 시도하면 될 수 있는 실패인가
+    error_code: str | None = None           # 22장: SQLSTATE 또는 오류 종류
+    attempts: int = 1                       # 22장: 시도 횟수 (retries)
+    replayed: bool = False                  # 22장: 멱등 키로 저장된 응답을 돌려준 것인가
 
     @property
     def ok(self) -> bool:
@@ -266,6 +308,8 @@ class ActionEngine:
         self.client = client
         self.states = StateMachines(client.onto)
         self._ready = False
+        self.lock_timeout = "5s"            # 22장: 다른 실행이 잡은 잠금을 이 시간까지만 기다린다
+        self.retry_backoff = 0.2            # 22장: 재시도 간격(초), 시도마다 두 배
 
     @property
     def conn(self):
@@ -281,9 +325,9 @@ class ActionEngine:
         from .db import database_url
         with psycopg.connect(database_url(self.client.onto, self.client._url), autocommit=True) as ddl:
             current = ddl.execute(
-                f"""SELECT to_regclass('{ENGINE_SCHEMA}.policy_decisions') IS NOT NULL AND EXISTS (
+                f"""SELECT to_regclass('{ENGINE_SCHEMA}.idempotency_keys') IS NOT NULL AND EXISTS (
                         SELECT 1 FROM information_schema.columns WHERE table_schema = '{ENGINE_SCHEMA}'
-                        AND table_name = 'approval_requests' AND column_name = 'preview')""").fetchone()[0]
+                        AND table_name = 'action_log' AND column_name = 'error')""").fetchone()[0]
             if not current:
                 ddl.execute("SET lock_timeout = '10s'")
                 ddl.execute(DDL)
@@ -291,9 +335,24 @@ class ActionEngine:
 
     # ================================================================== 실행
     def apply(self, action: str, target: Any, *, actor: dict, params: dict | None = None,
-              dry_run: bool = False, expect: dict | None = None, _approval: str | None = None,
-              _preview: list | None = None) -> ActionResult:
-        """expect: {"status": "검토중"} 처럼 실행자가 읽어 둔 값. 그사이 바뀌었으면 rejected (20장)"""
+              dry_run: bool = False, expect: dict | None = None, idempotency_key: str | None = None,
+              retries: int = 0, _approval: str | None = None, _preview: list | None = None) -> ActionResult:
+        """expect: {"status": "검토중"} 처럼 실행자가 읽어 둔 값. 그사이 바뀌었으면 rejected (20장)
+        idempotency_key: 같은 실행자가 같은 키로 다시 보내면 실행하지 않고 처음 응답을 돌려준다 (22장)
+        retries: retryable 실패(잠금 시간 초과·동시 변경 등)일 때 처음부터 다시 실행할 횟수 (22장)"""
+        attempt = 0
+        while True:
+            attempt += 1
+            res = self._apply_once(action, target, actor=actor, params=params, dry_run=dry_run, expect=expect,
+                                   idempotency_key=idempotency_key, _approval=_approval, _preview=_preview)
+            res.attempts = attempt
+            if not res.retryable or attempt > retries:
+                return res
+            time.sleep(self.retry_backoff * 2 ** (attempt - 1))
+
+    def _apply_once(self, action: str, target: Any, *, actor: dict, params: dict | None, dry_run: bool,
+                    expect: dict | None, idempotency_key: str | None, _approval: str | None,
+                    _preview: list | None) -> ActionResult:
         self.ensure_tables()
         act = self.client.onto.actions.get(action)
         if act is None:
@@ -304,10 +363,17 @@ class ActionEngine:
                            approval_id=_approval)
         actor = dict(actor)
         params_in = dict(params or {})
+        key = idempotency_key if (idempotency_key and not dry_run) else None
         try:
             with self.conn.transaction(force_rollback=dry_run):
+                # 잠금을 무한정 기다리지 않는다 (이 트랜잭션 안에서만 적용)
+                self.conn.execute("SELECT set_config('lock_timeout', %s, true)", (self.lock_timeout,))
+                replay, owns_key = None, False
                 try:
                     actor = self._check_actor(actor)
+                    if key:
+                        self._claim_key(key, action, target, params_in, expect, actor, res)
+                        owns_key = True                          # 선점에 성공했을 때만 응답을 저장한다
                     self._check_role(act, actor)                 # 권한 없는 실행자에게는 입력 오류도 알려주지 않는다
                     params_ = self._check_params(act, params_in)
                     target_set = self._lock_target(act, target, params_, actor)
@@ -319,14 +385,16 @@ class ActionEngine:
                     if _approval is None and act.approval and \
                             self.evaluate(act.approval.required_if, target_set, params_, actor):
                         preview = self._preview(act, target_set, params_, actor, res)
-                        res.approval_id, expires = self._request_approval(act, action, target, actor, params_,
-                                                                          preview, res)
-                        res.events = ["approval_requested"]
+                        res.approval_id, expires, existing = self._request_approval(
+                            act, action, target, actor, params_, preview, res)
+                        res.events = [] if existing else ["approval_requested"]
                         raise ActionStop("approval_required",
                                          [act.approval.reason or "승인이 필요합니다",
                                           f"승인자 역할: {', '.join(act.approval.approver_roles)}"]
                                          + ([f"승인 기한: {_minute(expires)}"] if expires else [])
-                                         + [f"변경 미리보기 {len(preview)}건을 승인 요청에 저장했습니다"])
+                                         + ([f"같은 승인 요청이 이미 대기 중입니다 (요청자 {existing}) — "
+                                             "새로 만들지 않았습니다"] if existing else
+                                            [f"변경 미리보기 {len(preview)}건을 승인 요청에 저장했습니다"]))
                     for edit in act.edits:
                         res.changes += self._apply_edit(act, edit, target_set, params_, actor, res)
                     if _preview is not None:
@@ -336,19 +404,75 @@ class ActionEngine:
                     res.messages.append(f"{len(res.changes)}건 변경" + (" (dry-run: 롤백됨)" if dry_run else ""))
                 except ActionStop as stop:
                     res.status, res.messages = stop.status, stop.messages
+                except _Replay as r:
+                    replay = r.result
+                if replay is not None:
+                    return replay
                 self._log(res, actor, params_in)
-        except Exception as e:  # noqa: BLE001 — 트랜잭션은 이미 롤백됨. 실패 기록만 따로 남긴다
+                if owns_key:
+                    self._store_key(key, actor, res)
+        except Exception as e:  # noqa: BLE001 — 트랜잭션은 이미 롤백됨(멱등 키 포함). 실패 기록만 따로 남긴다
             if isinstance(e, StateConflict):
                 res.status, res.messages = "rejected", e.messages        # 허용되지 않은 전이·동시 변경
+                res.retryable, res.error_code = e.retryable, "state_conflict"
             elif isinstance(e, (FunctionError, QueryError)):
                 res.status, res.messages = "invalid", [str(e)]           # 정의·입력 문제
             else:
-                res.status, res.messages = "failed", [f"{type(e).__name__}: {e}"]   # DB 제약 위반 등
+                res.retryable, res.error_code = classify(e)
+                kind = "일시적 오류 — 다시 시도할 수 있습니다" if res.retryable else "다시 시도해도 같은 결과입니다"
+                res.status, res.messages = "failed", [f"{type(e).__name__}: {e}".strip(), f"({kind})"]
             res.changes, res.events, res.transitions = [], [], []
             if not dry_run:
-                with self.conn.transaction():
-                    self._log(res, actor, params_in)
+                try:
+                    with self.conn.transaction():
+                        self._log(res, actor, params_in)
+                except psycopg.Error:                                    # 연결이 끊긴 경우 등: 기록도 실패
+                    res.messages.append("(실패 기록을 남기지 못했습니다)")
         return res
+
+    # ------------------------------------------------------------------ 멱등 키 (22장)
+    @staticmethod
+    def _request_hash(action: str, target: Any, params: dict, expect: dict | None) -> str:
+        body = json.dumps({"action": action, "target": str(target), "params": params, "expect": expect},
+                          ensure_ascii=False, sort_keys=True, default=str)
+        return hashlib.sha256(body.encode()).hexdigest()
+
+    def _claim_key(self, key: str, action: str, target: Any, params: dict, expect: dict | None, actor: dict,
+                   res: ActionResult) -> None:
+        """키를 선점한다. 이미 있으면(같은 요청의 재전송) _Replay, 다른 요청이면 invalid.
+        같은 키로 동시에 들어온 두 번째 요청은 INSERT 에서 첫 트랜잭션이 끝나기를 기다린다."""
+        h = self._request_hash(action, target, params, expect)
+        claimed = self.conn.execute(
+            f"""INSERT INTO {ENGINE_SCHEMA}.idempotency_keys (actor_id, key, request_hash, action, target_pk, execution_id)
+                VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (actor_id, key) DO NOTHING RETURNING key""",
+            (actor["id"], key, h, action, str(target), res.execution_id)).fetchone()
+        if claimed:
+            return
+        prev = self.conn.execute(
+            f"SELECT * FROM {ENGINE_SCHEMA}.idempotency_keys WHERE actor_id = %s AND key = %s FOR UPDATE",
+            (actor["id"], key)).fetchone()
+        if prev["request_hash"] != h:
+            raise ActionStop("invalid", [f"멱등 키 '{key}' 는 이미 다른 요청({prev['action']}({prev['target_pk']}))에 "
+                                         "쓰였습니다. 새 요청에는 새 키를 쓰세요"])
+        self.conn.execute(
+            f"""UPDATE {ENGINE_SCHEMA}.idempotency_keys SET replays = replays + 1, last_replayed_at = clock_timestamp()
+                WHERE actor_id = %s AND key = %s""", (actor["id"], key))
+        known = {f.name for f in fields(ActionResult)}
+        stored = ActionResult(**{k: v for k, v in prev["response"].items() if k in known})
+        stored.replayed = True
+        raise _Replay(stored)
+
+    def _store_key(self, key: str, actor: dict, res: ActionResult) -> None:
+        self.conn.execute(
+            f"UPDATE {ENGINE_SCHEMA}.idempotency_keys SET response = %s WHERE actor_id = %s AND key = %s",
+            (_json(res.to_dict()), actor["id"], key))
+
+    def purge_idempotency_keys(self, older_than: str = "1d") -> int:
+        """오래된 멱등 키 정리 — 클라이언트의 재시도 기간보다 길게 보관한다"""
+        self.ensure_tables()
+        cur = self.conn.execute(f"DELETE FROM {ENGINE_SCHEMA}.idempotency_keys WHERE created_at < now() - %s::interval",
+                                (_duration(older_than),))
+        return cur.rowcount
 
     def candidates(self, action: str, *, actor: dict | None = None, params: dict | None = None) -> ObjectSet:
         """이 Action 을 실행할 수 있는 대상 객체 집합
@@ -608,7 +732,18 @@ class ActionEngine:
                             + [f"미리보기에 있었지만 사라진 변경: {x}" for x in missing[:3]])
 
     def _request_approval(self, act: Action, action: str, target: Any, actor: dict, params: dict,
-                          preview: list[dict], res: ActionResult) -> tuple[str, datetime | None]:
+                          preview: list[dict], res: ActionResult) -> tuple[str, datetime | None, str | None]:
+        """(approval_id, 기한, 이미 있던 요청의 요청자). 같은 대상·같은 입력의 승인 요청이 기한 안에서
+        대기 중이면 새로 만들지 않고 그것을 돌려준다 (22장: 업무 규칙에 의한 중복 방지)"""
+        dup = self.conn.execute(
+            f"""SELECT approval_id, expires_at, requested_by FROM {ENGINE_SCHEMA}.approval_requests
+                WHERE status = 'pending' AND action = %s AND target_pk = %s AND params = %s
+                  AND (expires_at IS NULL OR expires_at >= %s)
+                ORDER BY created_at LIMIT 1""",
+            (action, str(target), _json(params), self.client.now())).fetchone()
+        if dup:
+            exp = dup["expires_at"].replace(tzinfo=None) if dup["expires_at"] else None
+            return str(dup["approval_id"]), exp, dup["requested_by"].get("id")
         approval_id = str(uuid.uuid4())
         expires = self.client.now() + _duration(act.approval.expires_in) if act.approval.expires_in else None
         self.conn.execute(
@@ -623,7 +758,7 @@ class ActionEngine:
                     {"approval_id": approval_id, "action": action, "requested_by": actor,
                      "approver_roles": act.approval.approver_roles, "reason": act.approval.reason,
                      "expires_at": expires, "changes": len(preview)})
-        return approval_id, expires
+        return approval_id, expires, None
 
     def _event(self, event_type: str, execution_id: str, object_type: str, target_pk: Any, payload: dict) -> None:
         self.conn.execute(
@@ -749,8 +884,9 @@ class ActionEngine:
         cols = sql.SQL(", ").join(sql.SQL("{} AS {}").format(
             sql.Identifier(ot.properties[k].column or k), sql.Identifier(k)) for k in [pk_name, *values])
         locked = {r[pk_name]: r for r in self.conn.execute(
-            sql.SQL("SELECT {} FROM {} WHERE {} = ANY(%s) FOR UPDATE").format(
-                cols, sql.Identifier(ot.source.table), sql.Identifier(pk_col)), ([o.pk for o in objs],))}
+            sql.SQL("SELECT {} FROM {} WHERE {} = ANY(%s) ORDER BY {} FOR UPDATE").format(   # 22장: 잠금 순서 고정
+                cols, sql.Identifier(ot.source.table), sql.Identifier(pk_col), sql.Identifier(pk_col)),
+            ([o.pk for o in objs],))}
         conflicts = []
         for o in objs:
             now = locked.get(o.pk)
@@ -760,7 +896,7 @@ class ActionEngine:
             conflicts += [f"동시 변경 감지: {otype}({o.pk}) 의 {k} 가 그사이 '{o.properties.get(k)}' → "
                           f"'{now[k]}' 로 바뀌었습니다" for k in values if now[k] != o.properties.get(k)]
         if conflicts:
-            raise StateConflict(conflicts + ["다른 실행과 겹쳤습니다. 최신 상태로 다시 시도하세요."])
+            raise StateConflict(conflicts + ["다른 실행과 겹쳤습니다. 최신 상태로 다시 시도하세요."], retryable=True)
 
         # 상태 전이 검사: 실행 전 검사는 대상만 보았으므로, 링크 객체까지 모든 변경을 다시 확인한다
         m = self.states.machine(otype)
@@ -839,9 +975,12 @@ class ActionEngine:
         return list(act.emits)
 
     def _log(self, res: ActionResult, actor: dict, params: dict) -> None:
+        error = {"code": res.error_code, "retryable": res.retryable} if res.error_code else None
         self.conn.execute(
             f"""INSERT INTO {ENGINE_SCHEMA}.action_log
-                (execution_id, action, object_type, target_pk, actor, params, status, messages, changes, approval_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                (execution_id, action, object_type, target_pk, actor, params, status, messages, changes, approval_id,
+                 error)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (res.execution_id, res.action, res.object_type, str(res.target), _json(actor), _json(params),
-             res.status, _json(res.messages), _json(res.changes), res.approval_id))
+             res.status, _json(res.messages), _json(res.changes), res.approval_id,
+             _json(error) if error else None))
