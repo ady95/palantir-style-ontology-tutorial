@@ -20,6 +20,7 @@
 | 24 | 감사 로그(객체 이력·실행 추적·해시 체인·완전성 점검·지표) · 이벤트 구독 · 피드백 | ✅ v0.1 |
 | 25 | AI 에이전트 인터페이스: 실행자별 컨텍스트·도구 6개·다음 행동 안내·읽은 값 expect·업무 단위 멱등 키·확인 모드 | ✅ v0.1 |
 | 26 | MCP 서버(stdio·Streamable HTTP): 토큰별 도구 목록·isError·리소스·프롬프트·DB 세션·사람의 확인 CLI | ✅ v0.1 |
+| 27 | LangGraph 업무 그래프: 탐지·분석·메모(LLM)·실행·승인 대기 중단/재개·실행 기록 대조·보고, PostgreSQL 체크포인트 | ✅ v0.1 |
 
 > 세무 정의(taxos)는 장이 진행되며 버전이 오릅니다. 각 장 원고의 출력은 그 장의 태그 기준입니다.
 >
@@ -59,6 +60,7 @@
 │   ├── agent.py              # AI 에이전트 인터페이스: 컨텍스트·도구 정의·도구 실행(AgentSession) [25장]
 │   ├── llm.py                # OpenAI 호환 API 도구 호출 루프 (run_agent · run_mcp_agent)     [25·26장]
 │   ├── mcp_server.py         # MCP 서버: JWT 인증, scope 별 도구, DB 세션(SessionStore)        [26장]
+│   ├── workflow.py           # LangGraph 업무 그래프: 신고 지연 위험 고객 처리, 중단·재개      [27장]
 │   ├── loader.py, cli.py
 ├── examples/17_object_link_engine.py   # PART 2 SPARQL 질문을 엔진으로 다시 풀기
 ├── examples/17_compare_sparql.py       # SPARQL(RDF 그래프)과 엔진(운영 DB)의 결과 ID 집합 대조
@@ -72,6 +74,7 @@
 ├── examples/24_audit_feedback.py          # 요청 이후 추적 → 이력·추적 → 완전성 점검·재처리 → 피드백 → 지표
 ├── examples/25_agent_interface.py         # 컨텍스트 크기 → 도구 목록 → 도구 직접 호출 → 확인 모드 → (--llm) LLM 에이전트
 ├── examples/26_mcp_server.py              # 토큰별 도구 → 결과·리소스·프롬프트 → 세션 이어 가기·확인 → HTTP → (--llm) MCP 호스트
+├── examples/27_workflow.py                # 그래프 구조 → 승인 대기 → 재개 → 실행 직후 중단 → 판단 뒤 변경 → 승인 대기 중 변경
 ├── examples/dev_api_keys.yaml             # 개발용 API 키 (토큰 → 실행자)
 ├── ontologies/               # 도메인 정의 (엔진 코드 수정 없이 교체)
 │   ├── taxos/ontology.yaml       # 세무 v0.6.0: Object 9 · Link 12 · Function 4 · Action 11 · 상태 머신 3 · 정책 2 · 구독 1
@@ -668,6 +671,33 @@ uv run python examples/26_mcp_server.py          # LLM 없이 1~4단계
 uv run python examples/26_mcp_server.py --llm    # MCP 호스트 (반복: --repeat 3)
 ```
 
+## 업무 그래프 (27장, LangGraph)
+
+```bash
+# 실행 — 승인 대기에서 멈춘다. 그래프 상태는 DB(minionto.checkpoints 등)에 남는다
+uv run python -m minionto workflow run ontologies/taxos/ontology.yaml --task W1 --today 2027-01-18 [--llm]
+uv run python -m minionto approvals list ontologies/taxos/ontology.yaml
+uv run python -m minionto approvals decide ontologies/taxos/ontology.yaml <승인ID> --actor A001,세무사,human [--reject]
+# 다른 프로세스에서 이어 가기 — 승인 결과는 엔진의 승인 기록에서 읽는다 (--stop: 더 기다리지 않고 보고)
+uv run python -m minionto workflow resume ontologies/taxos/ontology.yaml --task W1 [--llm] [--stop]
+uv run python -m minionto workflow show ontologies/taxos/ontology.yaml --task W1
+```
+
+| 누가 정하나 | 무엇을 |
+|---|---|
+| 그래프(코드) | 대상(위험 점수 기준), 순서·반복, 실행 결과에 따른 분기, 승인 대기에서 멈춤 |
+| 온톨로지(엔진) | 실행 조건·권한·상태 전이, 승인 필요 여부, 중복 실행(멱등 키) |
+| LLM | 고객 메모와 담당자 요약 문장 — 그래프가 검사하고, 통과 못 하면 템플릿으로 |
+
+- 업무 ID 하나 = 그래프 thread_id = 도구 세션 키(agent_sessions) = 멱등 키의 업무 부분.
+- 노드 하나가 한 단계(super-step)이고 대상 하나에 4~5단계라 `recursion_limit` 을 1000 으로 준다.
+- 데모 DB 를 바꾸므로 실습 뒤에는 `bash scripts/load_taxos.sh` 로 다시 적재한다 (체크포인트도 함께 지워진다).
+
+```bash
+uv run python examples/27_workflow.py          # 템플릿 문장 (모든 변경 롤백)
+uv run python examples/27_workflow.py --llm    # 메모·요약을 OpenAI 호환 LLM 으로
+```
+
 ## v0.1의 제약 (의도적으로 단순화)
 
 | 제약 | 영향 | 대안 |
@@ -697,6 +727,9 @@ uv run python examples/26_mcp_server.py --llm    # MCP 호스트 (반복: --repe
 | 확인한 사람은 세션 기록에만 | action_log 의 실행자는 에이전트, 확인자는 agent_sessions.state 에 | 확인을 별도 Action·감사 기록으로 |
 | 같은 토큰의 동시 호출은 세션 저장이 경합 | 마지막 저장이 이긴다 (멱등 키가 중복 실행은 막음) | 세션 행 잠금 |
 | 확인 모드는 미리보기 시점과 실행 시점 사이 변경을 expect(상태)로만 확인 | 상태 밖 속성이 바뀌어도 그대로 실행 | 미리보기와 실제 변경 비교(21장 승인의 _check_preview 방식) |
+| 업무 그래프는 대상을 하나씩 차례로 처리 | 대상이 많으면 느리다 (37건에 노드 실행 약 90회) | 대상마다 하위 그래프를 Send 로 나누고, 연결·세션을 대상별로 |
+| 그래프는 승인 기록을 엔진 테이블에서 직접 읽음 | 에이전트 도구에는 승인 조회가 없다 | 원격 그래프는 API 의 승인 조회 또는 승인 이벤트 구독 |
+| 메모 검사는 규칙 몇 개(길이·자료 이름·전화번호·금액) | 어조나 그 밖의 사실 오류는 못 잡는다 | 승인 단계에서 사람이 미리보기로 확인, 평가 세트 |
 | 외부 호출 결과는 발송 후 기록만 | 외부가 먼저 성공해야 하는 Write-back(예: 전자신고 제출)은 구현하지 않음 | 외부 먼저 호출 + 멱등 키 + 결과를 Action 으로 기록 + 대사(reconciliation) |
 | API 는 요청마다 DB 연결을 새로 엶 | 동시 요청이 많으면 연결 비용 | 커넥션 풀(psycopg_pool) |
 | Registry 는 활성 버전 하나만 서빙 | 버전별 API 동시 제공(`/v1`, `/v2`) 불가 | 서버 재시작으로 전환, 이후 버전 라우팅 |

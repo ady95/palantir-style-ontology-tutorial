@@ -12,6 +12,7 @@
   python -m minionto serve ontologies/taxos/ontology.yaml --auth jwt
   python -m minionto query ontologies/taxos/ontology.yaml Customer --as A003,실무자,human
   python -m minionto approvals list|expire ontologies/taxos/ontology.yaml
+  python -m minionto approvals decide ontologies/taxos/ontology.yaml <승인ID> --actor A001,세무사,human [--reject]
   python -m minionto decisions ontologies/taxos/ontology.yaml
   python -m minionto outbox list ontologies/taxos/ontology.yaml [--status pending]
   python -m minionto outbox run ontologies/taxos/ontology.yaml --integrations ontologies/taxos/integrations.py \
@@ -28,6 +29,8 @@
   python -m minionto mcp ontologies/taxos/ontology.yaml --http --port 8765              (Streamable HTTP)
   python -m minionto agent pending ontologies/taxos/ontology.yaml
   python -m minionto agent confirm ontologies/taxos/ontology.yaml <세션> <확인토큰> --actor A001,세무사,human
+  python -m minionto workflow run ontologies/taxos/ontology.yaml --task W1 --today 2027-01-18 [--llm]  (27장)
+  python -m minionto workflow resume|show ontologies/taxos/ontology.yaml --task W1 [--stop]
 """
 
 from __future__ import annotations
@@ -305,6 +308,8 @@ def cmd_token(args) -> int:
 def cmd_approvals(args) -> int:
     from .objects import OntologyClient
     with OntologyClient.open(args.file, args.db_url, today=args.today) as client:
+        if args.op == "decide":
+            return _decide(client, args)
         if args.op == "expire":
             closed = client.actions.expire_stale()
             print(f"기한이 지나 만료한 승인 요청: {len(closed)}건")
@@ -318,6 +323,19 @@ def cmd_approvals(args) -> int:
               f"승인자 {'/'.join(r['approver_roles'])}  기한 {exp}{'  (기한 지남)' if r['overdue'] else ''}  "
               f"변경 {len(r['preview'])}건")
     return 0
+
+
+def _decide(client, args) -> int:
+    """사람이 승인 요청을 승인·반려한다 (승인 ID 앞부분만 써도 된다)"""
+    if not args.id or not args.actor:
+        raise SystemExit("approvals decide <파일> <승인ID> --actor <id>,세무사,human [--reject] [--comment ...]")
+    ids = [str(r["approval_id"]) for r in client.actions.pending_approvals()
+           if str(r["approval_id"]).startswith(args.id)]
+    if len(ids) != 1:
+        raise SystemExit(f"대기 중인 승인 요청 중 '{args.id}' 로 시작하는 것이 {len(ids)}건입니다")
+    res = client.actions.decide(ids[0], _actor(args.actor), approve=not args.reject, comment=args.comment)
+    print(res)
+    return 0 if res.status in ("completed", "rejected") else 1
 
 
 def cmd_decisions(args) -> int:
@@ -479,6 +497,96 @@ def cmd_agent(args) -> int:
         return 0 if out["status"] in ("completed", "rejected") else 1
 
 
+def _wf_line(node: str, upd: dict) -> str | None:
+    """그래프 진행을 한 줄로 (노드가 남긴 log 로)"""
+    for x in (upd or {}).get("log", []):
+        if node == "detect":
+            return (f"detect         자료수집중 신고 {x['returns']}건 · 고객 {x['customers']}명 → "
+                    f"대상 {x['targets']}건")
+        if node == "analyze":
+            return f"analyze  {x['return_id']}  판단 {x['check']}"
+        if node == "draft":
+            return f"draft    {x['return_id']}  메모 {x['by']}" + (f"  (검사 {x['problems']})" if x["problems"] else "")
+        if node == "act":
+            return f"act      {x['return_id']}  {x['status']}"
+        if node == "wait_approval":
+            return f"wait_approval  승인 대기 {x['waiting']}건"
+        if node == "verify":
+            return f"verify         확인 문제 {x['problems']}건"
+    return None
+
+
+def _wf_stream(graph, inp, cfg, verbose: bool) -> None:
+    for chunk in graph.stream(inp, cfg, stream_mode="updates"):
+        for node, upd in chunk.items():
+            if node == "__interrupt__":
+                continue
+            line = _wf_line(node, upd if isinstance(upd, dict) else {})
+            if line and (verbose or not line.startswith("analyze")):
+                print(line)
+
+
+def _wf_finish(graph, cfg) -> int:
+    st = graph.get_state(cfg)
+    v = st.values
+    waits = [i.value for t in st.tasks for i in t.interrupts]
+    if waits:
+        w = waits[0]
+        print(f"\n멈춤: {w['message']} (업무 {w['task_id']})")
+        for x in w["waiting"]:
+            print(f"  승인 {x['approval_id'][:8]}  {x['return_id']} ({x['customer_id']})  메모: {x['note']}")
+        print("승인·반려는 사람이: python -m minionto approvals decide <파일> <승인ID> --actor <id>,세무사,human")
+        print(f"이어 가기: python -m minionto workflow resume <파일> --task {w['task_id']}")
+        return 0
+    r = v.get("report") or {}
+    print(f"\n보고 (기준일 {r.get('as_of')}, 점수 {r.get('min_score')} 이상 {r.get('targets')}건)")
+    print("  결과    " + ", ".join(f"{k} {n}" for k, n in r.get("counts", {}).items()))
+    print("  완료    " + ", ".join(r.get("completed", [])))
+    print("  승인    " + ", ".join(f"{k} {s}" for k, s in r.get("approval", {}).items()))
+    for why, ids in r.get("handoff_by_reason", {}).items():
+        print(f"  넘김 {len(ids):2d}건  {why}")
+    print("  확인 실패 " + (", ".join(r.get("unverified", [])) or "없음"))
+    print("\n요약:\n" + (v.get("summary") or ""))
+    return 0
+
+
+def cmd_workflow(args) -> int:
+    """신고 지연 위험 고객 처리 업무 그래프 (27장)"""
+    from .db import database_url
+    from .loader import load
+    from .objects import OntologyClient
+    from .workflow import FilingRiskWorkflow, LLMWriter, TemplateWriter, config, postgres_saver
+    _load_env()
+    saver = postgres_saver(database_url(load(args.file), args.db_url))
+    cfg = config(args.task)
+    prev = saver.get_tuple(cfg)
+    if args.op == "run" and prev is not None:
+        raise SystemExit(f"업무 '{args.task}' 가 이미 있습니다. 이어 가려면 resume, 새로 하려면 다른 --task")
+    if args.op != "run" and prev is None:
+        raise SystemExit(f"업무 '{args.task}' 가 없습니다")
+    as_of = args.today if args.op == "run" else prev.checkpoint["channel_values"].get("as_of")
+    with OntologyClient.open(args.file, args.db_url, today=as_of) as client:
+        writer = TemplateWriter()
+        if args.llm:
+            from .llm import ChatClient
+            writer = LLMWriter(ChatClient())
+        graph = FilingRiskWorkflow(client, _actor(args.actor), writer=writer,
+                                   min_score=args.min_score).build(checkpointer=saver)
+        if args.op == "show":
+            hist = list(graph.get_state_history(cfg))
+            print(f"체크포인트 {len(hist)}개 · 다음 노드 {graph.get_state(cfg).next}")
+            return _wf_finish(graph, cfg)
+        if args.op == "run":
+            inp = {"task_id": args.task, "as_of": as_of, "min_score": args.min_score}
+        else:
+            from langgraph.types import Command
+            inp = Command(resume={"stop": True} if args.stop else "check")
+        _wf_stream(graph, inp, cfg, args.verbose)
+        if args.llm:
+            print(f"\nLLM 사용: {json.dumps(writer.usage)}")
+        return _wf_finish(graph, cfg)
+
+
 def cmd_sdk(args) -> int:
     from .codegen import generate, metadata_from_file, metadata_from_url
     if args.url:
@@ -595,9 +703,13 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("--show", action="store_true", help="토큰 내용을 표준 오류로 함께 출력")
     sp.set_defaults(func=cmd_token)
 
-    sp = sub.add_parser("approvals", help="승인 대기 목록 · 기한 지난 요청 만료 (21장)")
-    sp.add_argument("op", choices=["list", "expire"])
+    sp = sub.add_parser("approvals", help="승인 대기 목록 · 승인/반려 · 기한 지난 요청 만료 (21장)")
+    sp.add_argument("op", choices=["list", "expire", "decide"])
     sp.add_argument("file")
+    sp.add_argument("id", nargs="?", help="decide: 승인 ID (앞부분만 써도 된다)")
+    sp.add_argument("--actor", help="decide: 승인하는 사람 id,역할,human")
+    sp.add_argument("--reject", action="store_true")
+    sp.add_argument("--comment")
     sp.add_argument("--today")
     sp.add_argument("--db-url")
     sp.set_defaults(func=cmd_approvals)
@@ -747,6 +859,19 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--reject", action="store_true")
     sp.add_argument("--today")
     sp.set_defaults(func=cmd_agent)
+
+    sp = sub.add_parser("workflow", help="신고 지연 위험 고객 처리 업무 그래프 — 실행·재개·상태 (27장)")
+    sp.add_argument("op", choices=["run", "resume", "show"])
+    sp.add_argument("file")
+    sp.add_argument("--task", required=True, help="업무 ID (그래프 thread_id = 도구 세션 키)")
+    sp.add_argument("--actor", default="agent-01,AI비서,agent")
+    sp.add_argument("--min-score", type=int, default=50)
+    sp.add_argument("--llm", action="store_true", help="메모·요약을 OpenAI 호환 LLM 으로")
+    sp.add_argument("--stop", action="store_true", help="resume: 승인을 더 기다리지 않고 보고")
+    sp.add_argument("-v", "--verbose", action="store_true")
+    sp.add_argument("--today")
+    sp.add_argument("--db-url")
+    sp.set_defaults(func=cmd_workflow)
 
     sp = sub.add_parser("schema", help="에디터 자동완성용 JSON Schema 출력")
     sp.add_argument("-o", "--output")

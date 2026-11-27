@@ -29,9 +29,11 @@ engine = [
 dev = [
     "pytest>=8",
 ]
-# PART 6~. AI 에이전트 연동 (MCP 서버·클라이언트)
+# PART 6~. AI 에이전트 연동 (MCP 서버·클라이언트, LangGraph 업무 그래프)
 agent = [
     "mcp>=2.3",
+    "langgraph>=1.2",
+    "langgraph-checkpoint-postgres>=3.2",
 ]
 
 [tool.uv]
