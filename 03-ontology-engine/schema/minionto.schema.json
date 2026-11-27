@@ -78,6 +78,47 @@
       "title": "Action",
       "type": "object"
     },
+    "ActorProfile": {
+      "additionalProperties": false,
+      "description": "$actor.<속성> 으로 쓸 실행자 정보를 실행자 자신의 객체에서 읽는다 (35장).\n값은 토큰이나 호출자가 준 것이 아니라 온톨로지 데이터에서 온다 — 실행자가 스스로 바꿀 수 없다.",
+      "properties": {
+        "object_type": {
+          "description": "실행자 id 가 이 객체 타입의 기본키 (예: 정비원)",
+          "title": "Object Type",
+          "type": "string"
+        },
+        "roles": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "이 역할의 실행자만 객체를 찾는다 (비우면 모든 실행자)",
+          "title": "Roles"
+        },
+        "attributes": {
+          "description": "$actor.<이름> 으로 쓸 속성",
+          "items": {
+            "type": "string"
+          },
+          "title": "Attributes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "object_type",
+        "attributes"
+      ],
+      "title": "ActorProfile",
+      "type": "object"
+    },
     "Approval": {
       "additionalProperties": false,
       "properties": {
@@ -652,6 +693,19 @@
             }
           ],
           "default": null
+        },
+        "event_property": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "아웃박스 이벤트 번호를 담은 속성 — 감사 추적이 이 객체를 그 이벤트의 발송 결과로 보여 준다 (23·35장)",
+          "title": "Event Property"
         }
       },
       "required": [
@@ -1310,6 +1364,17 @@
       },
       "title": "Roles",
       "type": "array"
+    },
+    "actor_profile": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ActorProfile"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "interfaces": {
       "additionalProperties": {

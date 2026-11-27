@@ -1,0 +1,48 @@
+
+== taxos
+  정의 검증·DB 대조              OK (객체 11·링크 14·Function 6·Action 16)
+  SDK 생성·컴파일               OK (754줄)
+  객체 조회                    OK (2,628행)
+  링크 따라가기                  OK (14/14)
+  Function 호출              OK (6개)
+  상태 머신                    OK (TaxReturn, DocumentSubmission, Task, CustomerSegment, Inquiry)
+  Action 판단(check)         OK (판단 30회)
+  Action 실행(입력 없는 것)       OK (rejected 4)
+  권한 정책                    OK (세무사 200 · 실무자 0 · AI비서 200)
+  에이전트 도구                  OK (도구 6개, 컨텍스트 4,998자)
+  MCP 도구                   OK (도구 6개)
+  REST API                 OK (HTTP 200·200)
+  감사 로그 점검                 OK (문제 0건)
+  다른 도메인 단어                없음
+
+== northwind
+  정의 검증·DB 대조              OK (객체 8·링크 9·Function 8·Action 4)
+  SDK 생성·컴파일               OK (464줄)
+  객체 조회                    OK (1,050행)
+  링크 따라가기                  OK (8/9)
+  Function 호출              OK (8개)
+  상태 머신                    OK (PurchaseOrder)
+  Action 판단(check)         OK (판단 6회)
+  Action 실행(입력 없는 것)       OK (입력 없는 Action 없음)
+  권한 정책                    OK (영업담당 91 · 구매담당 91 · 관리자 91 · AI비서 91)
+  에이전트 도구                  OK (도구 6개, 컨텍스트 3,097자)
+  MCP 도구                   OK (도구 6개)
+  REST API                 OK (HTTP 200·200)
+  감사 로그 점검                 OK (문제 0건)
+  다른 도메인 단어                없음
+
+== maintenance
+  정의 검증·DB 대조              OK (객체 3·링크 3·Function 4·Action 6)
+  SDK 생성·컴파일               OK (266줄)
+  객체 조회                    OK (108행)
+  링크 따라가기                  OK (3/3)
+  Function 호출              OK (4개)
+  상태 머신                    OK (WorkOrder)
+  Action 판단(check)         OK (판단 12회)
+  Action 실행(입력 없는 것)       OK (denied 2)
+  권한 정책                    OK (정비팀장 40 · 정비원 0 · AI비서 40)
+  에이전트 도구                  OK (도구 6개, 컨텍스트 1,615자)
+  MCP 도구                   OK (도구 6개)
+  REST API                 OK (HTTP 200·200)
+  감사 로그 점검                 OK (문제 0건)
+  다른 도메인 단어                없음

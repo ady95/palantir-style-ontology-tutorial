@@ -662,7 +662,7 @@ class ActionEngine:
     def _check_permission(self, act: Action, ts: ObjectSet, params: dict, actor: dict) -> None:
         perm = act.permission
         if perm.check and not self.evaluate(perm.check, ts, params, actor):
-            raise ActionStop("denied", ["권한 조건을 만족하지 않습니다 (예: 본인 담당 고객이 아님)"])
+            raise ActionStop("denied", ["권한의 추가 조건(permission.check)을 만족하지 않습니다"])
 
     def _check_preconditions(self, action: str, act: Action, ts: ObjectSet, params: dict, actor: dict) -> None:
         failed = self._failed_rules(action, act, ts, params, actor)
@@ -723,7 +723,7 @@ class ActionEngine:
         if head == "$params":
             return params.get(name)
         if head == "$actor":
-            return actor.get(name)
+            return self.client.actor_view(actor).get(name)
         if head == "$target":
             return ts.rows(name)[0][name]
         raise QueryError(f"알 수 없는 참조 '{raw}'")

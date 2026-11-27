@@ -158,7 +158,7 @@ def generate(meta: dict, *, class_name: str | None = None) -> str:
     w("    def __init__(self, base_url: str, token: str | None = None, **kw: Any):\n"
       "        super().__init__(base_url, self.ontology, token, **kw)\n\n")
 
-    w("    # ---- 객체 집합 (client.TaxReturn.where(...).all())\n")
+    w("    # ---- 객체 집합 (client.<객체 타입>.where(...).all())\n")
     for tname, ot in meta["object_types"].items():
         w(f"    @property\n    def {tname}(self) -> TypedObjectSet[{tname}]:\n")
         w(_doc(ot["display_name"], "        "))

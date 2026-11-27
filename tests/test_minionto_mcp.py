@@ -92,8 +92,8 @@ def test_results_errors_resources_prompts(tx):
     assert '"status": "ok"' in ok.content[0].text                       # 같은 내용을 text 로도
     assert denied.is_error is True and denied.structured_content["status"] == "denied"
     assert bad.is_error is True and bad.structured_content["status"] == "invalid"
-    assert ctx.startswith("실행자 agent-01") and "phone" not in ctx.split("볼 수 없는 속성")[0]
-    assert prompt.startswith("세무사무소 온톨로지") and "# 실행할 수 있는 Action" in prompt
+    assert ctx.splitlines()[1].startswith("실행자 agent-01") and "phone" not in ctx.split("볼 수 없는 속성")[0]
+    assert prompt.startswith("온톨로지(MiniOnto) 도구를 쓰는 원칙") and "# 실행할 수 있는 Action" in prompt
 
 
 def test_session_survives_connections_and_is_per_token(tx):

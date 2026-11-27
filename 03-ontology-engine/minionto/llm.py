@@ -17,7 +17,7 @@ import httpx
 
 from .agent import AgentSession
 
-SYSTEM_PROMPT = """너는 세무사무소의 업무 보조 AI 에이전트다. 온톨로지 도구로만 일한다.
+SYSTEM_PROMPT = """너는 업무 보조 AI 에이전트다. 온톨로지 도구로만 일한다. 어떤 업무인지는 아래 온톨로지 설명을 본다.
 - 데이터는 도구로 확인하고 추측하지 않는다. 도구 결과에 없는 값을 지어내지 않는다.
 - 무엇을 바꾸기 전에는 get_object 로 대상을 읽고, check_action 이나 list_actions 로 지금 할 수 있는지 확인한다.
 - 도구 결과의 next_step 을 따른다. 권한이 없거나 규칙상 안 되는 일은 우회하지 말고 이유를 설명한다.

@@ -6,7 +6,7 @@
 
 ontology:
   name: maintenance
-  version: 0.1.0
+  version: 0.2.0
   display_name: 공장 설비 정비 온톨로지
   description: 설비·정비원·작업 지시를 객체로 정의하고, 점검 지시·고장 신고·배정·작업 시작·완료를 Action으로 실행한다.
 
@@ -15,17 +15,20 @@ datasource:
 
 roles: [정비팀장, 정비원, AI비서]
 
+# 실행자 정보 (35장): $actor.line 은 실행자 id 로 찾은 정비원 객체의 line 이다. 호출자가 준 값은 쓰지 않는다.
+actor_profile:
+  object_type: Technician
+  roles: [정비팀장, 정비원]
+  attributes: [line]
+
 security:
   row_policies:
     own_line:
-      description: 정비원은 자기가 담당하는 설비와 자기 작업만 다룬다 (v0.1 우회 — 라인을 실행자 정보로 쓸 수 없음)
+      description: 정비원은 자기 라인의 설비와 그 설비의 작업 지시만 다룬다 (라인은 실행자 정보 — actor_profile)
       roles: [정비원]
       rules:
-        Equipment: { field: technician_id, op: eq, value: $actor.id }
-        WorkOrder:
-          any:
-            - { field: technician_id, op: eq, value: $actor.id }
-            - { field: equipment.technician_id, op: eq, value: $actor.id }
+        Equipment: { field: line, op: eq, value: $actor.line }
+        WorkOrder: { field: equipment.line, op: eq, value: $actor.line }
   property_policies:
     contact_info:
       description: AI 에이전트는 정비원의 연락처를 보지 않는다

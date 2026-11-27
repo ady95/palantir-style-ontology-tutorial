@@ -1,0 +1,68 @@
+
+========================================================================
+1. 정의 — 같은 엔진, 다른 도메인
+========================================================================
+Northwind 주문·재고 온톨로지 v0.2.0: 객체 8 · 링크 9 · Function 8 · Action 4 · 역할 영업담당, 구매담당, 관리자, AI비서
+처음 재고 부족 상품: [30, 70]
+
+========================================================================
+2. 출고 — 판매가 재고를 줄인다
+========================================================================
+  상품 38 Côte de Blaye            재고  17 →  14 (재주문 기준 15) completed
+  상품  7 Uncle Bob's Organic Drie 재고  15 →   9 (재주문 기준 10) completed
+  상품 35 Steeleye Stout           재고  20 →  14 (재주문 기준 15) completed
+  상품 51 Manjimup Dried Apples    재고  20 →   9 (재주문 기준 10) completed
+  상품 54 Tourtière                재고  21 →   9 (재주문 기준 10) completed
+  상품 69 Gudbrandsdalsost         재고  26 →  14 (재주문 기준 15) completed
+
+========================================================================
+3. 감지·발주 — 업무 그래프, AI 에이전트 권한
+========================================================================
+  부족 상품 8개 → {'approval_required': 6, 'completed': 2}
+  상품  7 Uncle Bob's Organic Dr 재고   9+예정   0 ≤ 기준  10 → 발주  11개   330.00 approval_required
+  상품 30 Nord-Ost Matjeshering  재고  10+예정   0 ≤ 기준  15 → 발주  20개   517.80 approval_required
+  상품 35 Steeleye Stout         재고  14+예정   0 ≤ 기준  15 → 발주  16개   288.00 completed
+  상품 38 Côte de Blaye          재고  14+예정   0 ≤ 기준  15 → 발주  16개  4216.00 approval_required
+  상품 51 Manjimup Dried Apples  재고   9+예정   0 ≤ 기준  10 → 발주  11개   583.00 approval_required
+  상품 54 Tourtière              재고   9+예정   0 ≤ 기준  10 → 발주  11개    81.95 completed
+  상품 69 Gudbrandsdalsost       재고  14+예정   0 ≤ 기준  15 → 발주  16개   576.00 approval_required
+  상품 70 Outback Lager          재고  15+예정  10 ≤ 기준  30 → 발주  35개   525.00 approval_required
+  승인 대기 6건 (AI 는 300 이상 관리자 승인)
+
+========================================================================
+4. 승인·재개
+========================================================================
+  관리자 승인: 상품 7 (330.00) → completed
+  관리자 반려: 상품 30 (517.80) → rejected
+  관리자 승인: 상품 38 (4216.00) → completed
+  관리자 반려: 상품 51 (583.00) → rejected
+  관리자 승인: 상품 69 (576.00) → completed
+  관리자 반려: 상품 70 (525.00) → rejected
+  보고: {'counts': {'completed': 5, 'rejected_by_approver': 3}, 'ordered_amount': 5491.95, 'waiting': []}
+
+========================================================================
+5. 입고 — 운영 데이터에 되쓰기
+========================================================================
+  P00001 상품 35 발주 16 · 입고 16 → 재고 14→30, 입고 예정 16→0 completed
+  P00002 상품 54 발주 11 · 입고 5 → 재고 9→14, 입고 예정 11→0 completed
+  감사: receive_purchase 실행자 E-buyer, 변경 2건, 이벤트 ['purchase_received']
+  아웃박스 이벤트: approval_decided 6, approval_requested 6, purchase_ordered 5, purchase_received 2, stock_shipped 6
+  지금 재고 부족 상품: [30, 51, 70] (일부 입고·반려·미입고 상품이 남음)
+
+========================================================================
+6. 막히는 요청
+========================================================================
+  판매 중단 상품 발주          → rejected: 판매가 중단된 상품은 발주하지 않습니다. / 재고가 부족한 상품만 발주합니다 (재고 + 입고 예정 ≤ 재주문 기준).
+  진행 중 발주가 있는 상품       → rejected: 재고가 부족한 상품만 발주합니다 (재고 + 입고 예정 ≤ 재주문 기준). / 이미 진행 중인 발주가 있습니다. (중복 발주 방지)
+  영업담당이 발주             → denied: 역할 '영업담당' 은 이 Action 을 실행할 수 없습니다 (허용: 구매담당, 관리자, AI비서)
+  재고보다 많이 출고           → rejected: 재고가 모자랍니다.
+  AI 가 입고 처리           → denied: 역할 'AI비서' 은 이 Action 을 실행할 수 없습니다 (허용: 구매담당, 관리자)
+  AI 에이전트 컨텍스트: 실행할 수 있는 Action ['request_purchase'], 고객의 감춘 속성 ['contact_name', 'fax', 'phone']
+  LLM #1: 단계 15, 도구 15회, run_action {'approval_required': 2}, 입력 토큰 117,499 — (답 없음: max_steps)
+     도구: {'find_objects': 6, 'call_function': 3, 'get_object': 2, 'check_action': 2, 'run_action': 2}
+  LLM #2: 단계 15, 도구 15회, run_action {'approval_required': 2}, 입력 토큰 92,191 — (답 없음: max_steps)
+     도구: {'find_objects': 4, 'call_function': 3, 'get_object': 3, 'check_action': 3, 'run_action': 2}
+  LLM #3: 단계 15, 도구 15회, run_action {'approval_required': 2}, 입력 토큰 104,321 — (답 없음: max_steps)
+     도구: {'find_objects': 5, 'call_function': 3, 'get_object': 3, 'check_action': 2, 'run_action': 2}
+
+(모든 변경을 롤백했습니다)

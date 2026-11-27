@@ -36,7 +36,7 @@ READ_ONLY = {"find_objects", "get_object", "list_actions", "check_action", "call
 # isError=false 인 결과 — 업무상 정상적으로 끝난 것 (승인 대기·확인 대기·입력 필요 포함)
 OK = {"ok", "ready", "preview", "completed", "replayed", "approval_required", "confirmation_required", "needs_input"}
 
-GUIDELINES = """세무사무소 온톨로지(MiniOnto) 도구를 쓰는 원칙:
+GUIDELINES = """온톨로지(MiniOnto) 도구를 쓰는 원칙 (어떤 업무인지는 온톨로지 설명을 본다):
 - 데이터는 도구로 확인하고 추측하지 않는다. 도구 결과에 없는 값을 지어내지 않는다.
 - 무엇을 바꾸기 전에는 get_object 로 대상을 읽고, check_action 이나 list_actions 로 지금 할 수 있는지 확인한다.
 - 도구 결과의 next_step 을 따른다. 권한이 없거나 규칙상 안 되는 일은 우회하지 말고 이유를 설명한다.
@@ -122,8 +122,10 @@ class MiniOntoMCP:
                 desc = f["description"]
                 if f["name"] == "call_function":               # args 는 자유 형식이므로 입력 이름을 설명에
                     desc += " 입력: " + "; ".join(
-                        f"{n}({', '.join(fn.inputs)})" for n, fn in c.onto.functions.items()) + \
-                        " — 예: {name: missing_documents, args: {tax_return: R00006}}"
+                        f"{n}({', '.join(fn.inputs)})" for n, fn in c.onto.functions.items())
+                    if c.onto.functions:                       # 35장: 예시도 이 온톨로지의 Function 으로
+                        n, fn = next(iter(c.onto.functions.items()))
+                        desc += f" — 예: {{name: {n}, args: {{{', '.join(f'{k}: <키>' for k in fn.inputs)}}}}}"
                 out.append(types.Tool(
                     name=f["name"], description=desc, input_schema=f["parameters"],
                     annotations=types.ToolAnnotations(read_only_hint=ro, destructive_hint=not ro,

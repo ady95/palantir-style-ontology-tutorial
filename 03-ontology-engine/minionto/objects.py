@@ -114,8 +114,26 @@ class OntologyClient:
         return (q.secure(actor) if actor else q).first()
 
     def bindings(self, params: dict | None = None, actor: dict | None = None) -> Bindings:
-        return Bindings(actor=actor if actor is not None else self.actor, params=params or {},
+        return Bindings(actor=self.actor_view(actor if actor is not None else self.actor), params=params or {},
                         today=self.today, now=self.now())
+
+    def actor_view(self, actor: dict | None) -> dict:
+        """$actor.* 에 쓸 값. actor_profile 의 속성은 호출자가 준 값을 버리고 실행자 객체에서 읽는다 (35장)"""
+        prof = self.onto.actor_profile
+        if not actor or prof is None:
+            return actor or {}
+        view = {k: v for k, v in actor.items() if k not in prof.attributes}
+        row = None
+        if prof.roles is None or actor.get("role") in prof.roles:
+            ot = self.onto.object_types[prof.object_type]
+            col = {a: ot.properties[a].column or a for a in prof.attributes}
+            pk = ot.properties[ot.source.primary_key].column or ot.source.primary_key
+            row = self.conn.execute(sql.SQL("SELECT {} FROM {} WHERE {}::text = %s").format(
+                sql.SQL(", ").join(sql.Identifier(c) for c in col.values()), sql.Identifier(ot.source.table),
+                sql.Identifier(pk)), (str(actor.get("id")),)).fetchone()
+        for a in prof.attributes:                          # 객체가 없으면 None — 그 값을 쓰는 조건은 거짓이 된다
+            view[a] = row[ot.properties[a].column or a] if row else None
+        return view
 
     def now(self) -> datetime:
         """$now. 기준일(today)을 정했으면 그 날짜의 현재 시각 — 시나리오 날짜와 기록 시각을 맞춘다"""

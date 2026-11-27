@@ -1,7 +1,7 @@
 """35장. 세 번째 도메인 — 설비 정비를 정의만으로 올리고 업무를 돌린다
 
     uv run python 10-benchmarks/reuse/maintenance_scenario.py
-    uv run python 10-benchmarks/reuse/maintenance_scenario.py --llm      # 마지막에 LLM 에이전트 1회
+    uv run python 10-benchmarks/reuse/maintenance_scenario.py --llm      # 7단계: LLM 에이전트 3회 (처음 데이터에서)
 
 1. 정의와 데이터     — 객체 3 · 링크 3 · Function 3 · Action 6 (엔진 코드 변경 없음)
 2. 점검 지시         — 점검 주기가 지난 설비를 찾아 AI 에이전트가 예방점검 지시 (중복 방지)
@@ -147,22 +147,36 @@ def main() -> int:
         print(f"  감사 기록(실행자 유형·결과): {dict(sorted(acts.items()))}")
         print(f"  승인 {[(a['status'], a['n']) for a in m['approvals']]} · 아웃박스 {[(a['status'], a['n']) for a in m['outbox']]}")
         print(f"  감사 로그 점검: 문제 {len(AuditLog(c).verify())}건")
-
-        if "--llm" in sys.argv:
-            from dotenv import load_dotenv
-
-            from minionto.llm import ChatClient, run_agent
-            load_dotenv(ROOT / ".env")
-            chat = ChatClient()
-            with c.conn.transaction(force_rollback=True):
-                s = AgentSession(c, AI, task_id="mt-llm")
-                r = run_agent(chat, s, "점검 주기가 지난 A라인 설비를 찾아서 예방점검을 지시해 줘.", max_steps=15)
-                done_ = Counter(x["result"].get("status") for x in r["trace"] if x["tool"] == "run_action")
-                print(f"\n  LLM: 단계 {r['steps']}, 도구 {dict(Counter(x['tool'] for x in r['trace']))}, "
-                      f"run_action {dict(done_)}, 입력 토큰 {r['usage']['prompt_tokens']:,}")
-                print(f"  답: {(r['answer'] or r['stopped'])[:300]}")
+    if "--llm" in sys.argv:
+        llm()
     print("\n(모든 변경을 롤백했습니다)")
     return 0
+
+
+def llm(runs: int = 3, max_steps: int = 30) -> None:
+    """7. LLM 에이전트 — 처음 데이터 상태에서, 회마다 롤백한다"""
+    from dotenv import load_dotenv
+
+    from minionto.llm import ChatClient, run_agent
+    load_dotenv(ROOT / ".env")
+    chat = ChatClient()
+    section(f"7. LLM 에이전트 ({runs}회, 최대 {max_steps}단계, 각 회 롤백)")
+    with OntologyClient.open(MT, today="2027-01-18") as c:
+        c.actions.ensure_tables()
+        expected = sorted(e.pk for e in c.objects("Equipment").where(line="A라인", status="가동").all()
+                          if c.actions.check("open_inspection", e.pk, actor=AI).status == "ready")
+        print(f"  정답(지시할 수 있는 A라인 설비): {expected}")
+        for k in range(runs):
+            with c.conn.transaction(force_rollback=True):
+                s = AgentSession(c, AI, task_id=f"mt-llm{k}")
+                r = run_agent(chat, s, "점검 주기가 지난 A라인 설비를 찾아서 예방점검을 지시해 줘.", max_steps=max_steps)
+                done = Counter(x["result"].get("status") for x in r["trace"] if x["tool"] == "run_action")
+                made = sorted(w.equipment_id for w in c.objects("WorkOrder").where(
+                    kind="예방점검", status="접수", created_by="agent", opened_at="2027-01-18").all())
+                print(f"  LLM #{k + 1}: 단계 {r['steps']}, 도구 {dict(Counter(x['tool'] for x in r['trace']))}, "
+                      f"입력 토큰 {r['usage']['prompt_tokens']:,}")
+                print(f"     run_action {dict(done)} · 만든 지시 {made} · 정답과 같음 {made == expected}")
+                print(f"     답: {(r['answer'] or r['stopped'])[:200]}".replace(chr(10), " "))
 
 
 if __name__ == "__main__":

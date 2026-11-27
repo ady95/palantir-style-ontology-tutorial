@@ -111,14 +111,16 @@ class AuditLog:
             out["approval"] = self._q(f"""SELECT status, requested_by->>'id' AS requested_by,
                                               decided_by->>'id' AS decided_by, comment
                                           FROM {S}.approval_requests WHERE approval_id = %s""", run["approval_id"])
-        notif = "notifications" if self._has_table("notifications") else None
+        records = [(n, ot) for n, ot in self.client.onto.object_types.items() if ot.event_property]   # 35장
         for ev in self._q(f"""SELECT event_id, event_type, status, attempts, published_at FROM {S}.outbox
                               WHERE execution_id = %s ORDER BY event_id""", execution_id):
             ev["deliveries"] = self._q(f"""SELECT subscriber, status, result, execution_id, detail
                                           FROM {S}.event_deliveries WHERE event_id = %s""", ev["event_id"])
-            ev["notifications"] = self._q(
-                f"""SELECT notification_id, status, external_id, attempts FROM {notif} WHERE event_id = %s
-                    ORDER BY notification_id""", ev["event_id"]) if notif else []
+            ev["notifications"] = []                      # 발송 결과 객체 (event_property 를 선언한 객체 타입)
+            for n, ot in records:
+                found = self.client.objects(n).where(**{ot.event_property: ev["event_id"]}) \
+                    .order_by(ot.source.primary_key).all()
+                ev["notifications"] += [{"object_type": n, **o.properties} for o in found]
             out["events"].append(ev)
         return out
 

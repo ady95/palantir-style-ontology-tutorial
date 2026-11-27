@@ -88,6 +88,8 @@ class ObjectType(Strict):
     properties: dict[str, Property]
     implements: list[str] = Field(default_factory=list)
     state_machine: StateMachine | None = None
+    event_property: str | None = Field(None, description="아웃박스 이벤트 번호를 담은 속성 — 감사 추적이 이 객체를 "
+                                                          "그 이벤트의 발송 결과로 보여 준다 (23·35장)")
 
 
 class InterfaceProperty(Strict):
@@ -336,6 +338,14 @@ class Subscription(Strict):
 # 최상위
 # ---------------------------------------------------------------------------
 
+class ActorProfile(Strict):
+    """$actor.<속성> 으로 쓸 실행자 정보를 실행자 자신의 객체에서 읽는다 (35장).
+    값은 토큰이나 호출자가 준 것이 아니라 온톨로지 데이터에서 온다 — 실행자가 스스로 바꿀 수 없다."""
+    object_type: str = Field(description="실행자 id 가 이 객체 타입의 기본키 (예: 정비원)")
+    roles: list[str] | None = Field(None, description="이 역할의 실행자만 객체를 찾는다 (비우면 모든 실행자)")
+    attributes: list[str] = Field(description="$actor.<이름> 으로 쓸 속성")
+
+
 class OntologyInfo(Strict):
     name: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
     version: str
@@ -351,6 +361,7 @@ class Ontology(Strict):
     ontology: OntologyInfo
     datasource: Datasource
     roles: list[str] = Field(default_factory=list, description="이 온톨로지에서 쓰는 사용자 역할")
+    actor_profile: ActorProfile | None = None
     interfaces: dict[str, Interface] = Field(default_factory=dict)
     object_types: dict[str, ObjectType]
     link_types: dict[str, LinkType] = Field(default_factory=dict)

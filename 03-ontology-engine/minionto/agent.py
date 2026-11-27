@@ -186,7 +186,10 @@ class AgentSession:
         """context() 를 시스템 프롬프트용 짧은 텍스트로"""
         c = self.context()
         a = c["actor"]
-        lines = [f"실행자 {a['id']} (역할 {a['role']}, 유형 {a['type']}) · 기준일 {c['today']}"]
+        info = self.onto.ontology                                    # 35장: 도메인 소개는 정의에서
+        lines = [f"온톨로지 {info.display_name or info.name} ({info.name} v{info.version})"
+                 + (f" — {info.description}" if info.description else ""),
+                 f"실행자 {a['id']} (역할 {a['role']}, 유형 {a['type']}) · 기준일 {c['today']}"]
         for n, d in {**c["policies"]["row_policies"], **c["policies"]["property_policies"]}.items():
             lines.append(f"정책 {n}: {d}")
         lines.append("# 객체 (속성: 타입, 링크: 대상[]=여러 개)")
@@ -225,9 +228,9 @@ class AgentSession:
                        f"{self.max_rows}건이며 count 는 전체 건수다.", {
                            "object_type": {"type": "string", "enum": types},
                            "where": {"type": "array", "description": "모두 만족 (AND). 항목은 {field, op, value} — "
-                                     "field 는 속성 또는 하나로 이어지는 링크.속성 (예: customer.risk_level). "
+                                     "field 는 속성 또는 하나로 이어지는 링크.속성 (예: <링크>.<속성>). "
                                      "여러 개로 이어지는 링크는 {some: {link, where}} 또는 {none: {link, where}} "
-                                     "(예: {some: {link: tax_returns, where: {field: status, op: eq, value: 자료수집중}}})",
+                                     "(예: {some: {link: <링크>, where: {field: <속성>, op: eq, value: <값>}}})",
                                      "items": {"type": "object", "properties": {
                                          "field": {"type": "string"}, "op": {"type": "string", "enum": OPS},
                                          "value": {}, "some": {"type": "object"}, "none": {"type": "object"}}}},

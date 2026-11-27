@@ -199,6 +199,7 @@ object_types:
     description: 아웃박스 이벤트를 외부(문자·메일·메신저)로 보낸 결과. 발송 작업자가 Action 으로 기록한다 (23장).
     source: { table: notifications, primary_key: notification_id, id_strategy: prefixed_sequence, id_prefix: N }
     title_property: event_type
+    event_property: event_id          # 감사 추적이 이벤트의 발송 결과로 보여 준다 (35장)
     properties:
       notification_id: { type: string, required: true }
       event_id:        { type: integer, required: true, display_name: 아웃박스 이벤트 }

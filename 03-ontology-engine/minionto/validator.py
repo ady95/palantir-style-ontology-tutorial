@@ -68,6 +68,7 @@ class Validator:
     # ------------------------------------------------------------------ 진입점
     def run(self) -> Report:
         self._object_types()
+        self._event_properties()
         self._link_types()
         self._functions()
         for name, action in self.onto.actions.items():
@@ -75,7 +76,25 @@ class Validator:
         self._state_machines()
         self._security()
         self._subscriptions()
+        self._actor_profile()
         return self.r
+
+    def _actor_profile(self) -> None:
+        prof = self.onto.actor_profile
+        if prof is None:
+            return
+        ot = self.onto.object_types.get(prof.object_type)
+        if ot is None:
+            self.r.error("actor_profile.object_type", f"객체 타입 '{prof.object_type}' 이 없습니다")
+            return
+        for a in prof.attributes:
+            if a in ACTOR_FIELDS:
+                self.r.error("actor_profile.attributes", f"'{a}' 는 실행자 기본 정보와 이름이 겹칩니다")
+            elif a not in ot.properties:
+                self.r.error("actor_profile.attributes", f"'{prof.object_type}' 에 속성 '{a}' 이 없습니다")
+        for role in prof.roles or []:
+            if role not in self.onto.roles:
+                self.r.error("actor_profile.roles", f"역할 '{role}' 이 roles 에 없습니다")
 
     # ------------------------------------------------------------------ Object Type
     def _object_types(self) -> None:
@@ -112,6 +131,11 @@ class Validator:
                                      f"'{iname}' 은 {ip.type} 타입을 요구하지만 {props[ipname].type} 입니다")
 
     # ------------------------------------------------------------------ Link Type
+    def _event_properties(self) -> None:
+        for name, ot in self.onto.object_types.items():
+            if ot.event_property and ot.event_property not in ot.properties:
+                self.r.error(f"object_types.{name}.event_property", f"속성 '{ot.event_property}' 이 없습니다")
+
     def _link_types(self) -> None:
         ots = self.onto.object_types
         for name, lt in self.onto.link_types.items():
@@ -490,12 +514,17 @@ class Validator:
             self.r.error(p, f"'{value}': 정책 조건에는 $actor·$today·$now 만 쓸 수 있습니다")
             return
         if head == "actor":
-            if rest not in ACTOR_FIELDS:
-                self.r.error(p, f"'{value}': $actor 에는 {', '.join(sorted(ACTOR_FIELDS))} 만 있습니다")
+            prof = self.onto.actor_profile
+            allowed = ACTOR_FIELDS | set(prof.attributes if prof else [])
+            if rest not in allowed:
+                self.r.error(p, f"'{value}': $actor 에는 {', '.join(sorted(allowed))} 만 있습니다"
+                                + ("" if prof else " (다른 실행자 정보는 actor_profile 로 선언)"))
         elif head == "params":
-            pname = rest.split(".")[0]
+            pname, _, deeper = rest.partition(".")
             if pname not in action.parameters:
                 self.r.error(p, f"'{value}': 파라미터 '{pname}' 가 정의되지 않았습니다")
+            elif deeper:                                  # 35장: 실행 때 값이 없어 invalid 가 되던 것을 정의에서 잡는다
+                self.r.error(p, f"'{value}': 파라미터 안의 속성은 참조할 수 없습니다 — Function 으로 계산하세요")
         elif head == "target":
             try:
                 res = self.schema.resolve(action.target, rest)
