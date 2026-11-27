@@ -1,0 +1,282 @@
+{
+ "B_etl_ms": 245.01,
+ "T1": {
+  "truth": 92,
+  "A": [
+   92,
+   1.59,
+   true
+  ],
+  "B": [
+   92,
+   307.6,
+   true
+  ],
+  "C": [
+   92,
+   2.97,
+   true
+  ],
+  "D": [
+   92,
+   718.51,
+   true
+  ],
+  "fresh": {
+   "changed": "C0002",
+   "A": true,
+   "B": false,
+   "C": true,
+   "D": true
+  }
+ },
+ "T2": {
+  "truth": 39,
+  "A": [
+   39,
+   1.83,
+   true
+  ],
+  "B": [
+   39,
+   9209.96,
+   true
+  ],
+  "C": [
+   39,
+   2.59,
+   true
+  ],
+  "D": [
+   39,
+   1.16,
+   true
+  ],
+  "D_sync_ms": 10096.37,
+  "D_applied": 99
+ },
+ "T3": {
+  "cases": {
+   "q1 법인인데 간이과세자": {
+    "DB": "막음 (CheckViolation)"
+   },
+   "q2 제출완료인데 제출일 없음": {
+    "DB": "막음 (CheckViolation)"
+   },
+   "q3 담당자 없는 고객": {
+    "DB": "막음 (NotNullViolation)"
+   }
+  },
+  "shacl_base": {
+   "violations": 0,
+   "warnings": 6,
+   "ms": 7077.02,
+   "messages": [
+    "자료 제출 현황이 등록되지 않은 현재 신고입니다. 미제출로 단정하지 말고 확인이 필요합니다."
+   ]
+  },
+  "shacl_broken": {
+   "violations": 3,
+   "warnings": 6,
+   "messages": [
+    "고객에게는 담당자가 정확히 한 명 있어야 합니다.",
+    "법인은 간이과세자가 될 수 없습니다.",
+    "자료 제출 현황이 등록되지 않은 현재 신고입니다. 미제출로 단정하지 말고 확인이 필요합니다.",
+    "제출완료 상태인데 제출일(tx:submittedAt)이 없습니다."
+   ]
+  },
+  "shacl_export": {
+   "violations": 0,
+   "warnings": 6,
+   "ms": 7743.33
+  },
+  "q4": {
+   "returns": [
+    "R00035",
+    "R00056",
+    "R00170",
+    "R00277",
+    "R00334",
+    "R00455"
+   ],
+   "engine_start_review_ready": [
+    "R00035",
+    "R00056",
+    "R00170",
+    "R00277",
+    "R00334",
+    "R00455"
+   ]
+  }
+ },
+ "T4": {
+  "R00146": {
+   "want": "executed",
+   "A": "executed",
+   "B": "executed",
+   "C": "executed",
+   "C_approval_record": false,
+   "D": "executed"
+  },
+  "R00360": {
+   "want": "blocked",
+   "A": "blocked",
+   "B": "blocked",
+   "C": "blocked",
+   "C_approval_record": false,
+   "D": "blocked"
+  },
+  "R00548": {
+   "want": "blocked",
+   "A": "blocked",
+   "B": "blocked",
+   "C": "blocked",
+   "C_approval_record": false,
+   "D": "blocked"
+  },
+  "R00517": {
+   "want": "approval",
+   "A": "approval",
+   "B": "approval",
+   "C": "approval",
+   "C_approval_record": true,
+   "D": "approval"
+  },
+  "R00001": {
+   "want": "blocked",
+   "A": "blocked",
+   "B": "blocked",
+   "C": "blocked",
+   "C_approval_record": false,
+   "D": "blocked"
+  },
+  "B_db_tasks_changed": 0,
+  "B_graph_tasks": 1
+ },
+ "T5": {
+  "A": {
+   "staff": 43,
+   "ai_pii": 0,
+   "how": "함수마다 직접 구현"
+  },
+  "B": {
+   "staff": null,
+   "ai_pii": null,
+   "how": "표준에 실행자별 접근 제어 없음"
+  },
+  "C": {
+   "staff": 43,
+   "ai_pii": 0,
+   "how": "정의의 행·속성 정책"
+  },
+  "D": {
+   "staff": 43,
+   "ai_pii": 0,
+   "how": "정책 + 실행자별 내보내기"
+  }
+ },
+ "T6": {
+  "A": {
+   "recorded": [
+    {
+     "task_id": "T00507",
+     "created_by": "agent",
+     "created_at": "2026-11-28 03:50:10.776533"
+    }
+   ],
+   "actor_id": false,
+   "before_after": false
+  },
+  "B": {
+   "recorded": null
+  },
+  "C": {
+   "recorded": {
+    "actor": "agent-01",
+    "action": "request_missing_documents",
+    "at": "2026-11-28 03:50:59.307001+09:00",
+    "changes": "3",
+    "events": "1"
+   },
+   "actor_id": true,
+   "before_after": true
+  },
+  "D": {
+   "same_as": "C",
+   "plus": "추론 분류의 inferred_by·evidence (30장)"
+  }
+ },
+ "T8": {
+  "target": "R00029",
+  "rule": "기한후신고 이력 고객에게 AI 가 자료를 요청하면 세무사 승인",
+  "A": {
+   "changed_lines": 3,
+   "where": "a_sql.request_documents",
+   "entry_points": {
+    "서비스 함수": "approval",
+    "에이전트 도구(28장 일반 도구)": "executed"
+   }
+  },
+  "B": {
+   "changed_lines": 2,
+   "where": "b_rdf.request_documents",
+   "entry_points": {
+    "SPARQL 업무 함수": "approval"
+   }
+  },
+  "C": {
+   "changed_lines": 4,
+   "where": "ontology.yaml approval.required_if",
+   "entry_points": {
+    "엔진(Action·API)": "approval_required",
+    "에이전트 도구(25~27장)": "approval_required",
+    "가능한 Action 목록(20장)": "approval_required"
+   }
+  },
+  "D": {
+   "changed_lines": 4,
+   "where": "ontology.yaml approval.required_if (추론 분류 사용)",
+   "entry_points": {
+    "엔진(Action·API)": "approval_required",
+    "에이전트 도구(25~27장)": "approval_required",
+    "가능한 Action 목록(20장)": "approval_required"
+   }
+  }
+ },
+ "LOC": {
+  "업무 코드": {
+   "A": 69,
+   "B": 71,
+   "C": 28,
+   "D": 23
+  },
+  "선언": {
+   "taxos.ttl": 95,
+   "taxos_shapes.ttl": 54,
+   "ontology.yaml": 661,
+   "taxos_mapping.yaml": 149,
+   "taxos_rules.ttl": 11
+  },
+  "기반": {
+   "07장 ETL(01_build_graph.py)": 114,
+   "MiniOnto 엔진(minionto/*.py)": 6762
+  }
+ },
+ "T7": {
+  "A (잠금 없음)": {
+   "trials": 6,
+   "duplicates": 6,
+   "errors": 0
+  },
+  "A (FOR UPDATE)": {
+   "trials": 6,
+   "duplicates": 0,
+   "errors": 0
+  },
+  "C·D (엔진)": {
+   "trials": 6,
+   "duplicates": 0,
+   "errors": 0
+  }
+ }
+}
