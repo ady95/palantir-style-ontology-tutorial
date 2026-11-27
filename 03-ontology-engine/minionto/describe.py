@@ -78,4 +78,6 @@ def public_metadata(onto: Ontology, *, version: str | None = None, checksum: str
         "display_name": info.display_name, "description": info.description, "roles": onto.roles,
         "object_types": object_types, "functions": functions, "actions": actions,
         "security": security,             # 21장: 정책 이름·설명·대상 (조건식은 내보내지 않는다)
+        "subscriptions": {n: {"description": s.description, "event": s.event, "action": s.action}
+                          for n, s in onto.subscriptions.items()},     # 24장
     }

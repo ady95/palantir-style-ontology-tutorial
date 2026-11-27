@@ -17,6 +17,7 @@
 | 21 | 토큰 인증(JWT·scope) · 행·속성 권한 정책 · 정책 판단 기록 · 승인 기한·미리보기·알림 | ✅ v0.1 |
 | 22 | 잠금 대기 시간 · 멱등 키 · 승인 요청 중복 방지 · 오류 분류와 자동 재시도 · 보상 Action | ✅ v0.1 |
 | 23 | 아웃박스 발송 작업자 · 재시도·순서·dead · 외부 멱등 키 · 발송 결과를 객체로 기록 | ✅ v0.1 |
+| 24 | 감사 로그(객체 이력·실행 추적·해시 체인·완전성 점검·지표) · 이벤트 구독 · 피드백 | ✅ v0.1 |
 
 > 세무 정의(taxos)는 장이 진행되며 버전이 오릅니다. 각 장 원고의 출력은 그 장의 태그 기준입니다.
 >
@@ -26,7 +27,8 @@
 > | `ch20` | 20장 | v0.2.0 (상태 머신, Action 4개 추가) |
 > | `ch21` | 21장 | v0.3.0 (보안 정책, 승인 기한) |
 > | `ch22` | 22장 | v0.4.0 (보상 Action) |
-> | `main` | 23장~ | v0.5.0 (Notification 객체, 시스템 실행자) |
+> | `ch23` | 23장 | v0.5.0 (Notification 객체, 시스템 실행자) |
+> | `main` | 24장~ | v0.6.0 (구독 auto_start_review) |
 
 ## 구조
 
@@ -50,6 +52,8 @@
 │   ├── auth.py               # 인증: JWT 발급·검증(JwtAuth), 개발용 키(ApiKeyAuth), scope        [21장]
 │   ├── policy.py             # 권한 정책: 행·속성 정책 집행, 판단 기록                         [21장]
 │   ├── outbox.py             # 아웃박스 발송 작업자: 재시도·순서·SKIP LOCKED·dead               [23장]
+│   ├── audit.py              # 감사 로그: 객체 이력·실행 추적·완전성 점검·운영 지표             [24장]
+│   ├── subscriptions.py      # 이벤트 구독: check() 후 시스템 실행자로 Action, 재처리          [24장]
 │   ├── loader.py, cli.py
 ├── examples/17_object_link_engine.py   # PART 2 SPARQL 질문을 엔진으로 다시 풀기
 ├── examples/17_compare_sparql.py       # SPARQL(RDF 그래프)과 엔진(운영 DB)의 결과 ID 집합 대조
@@ -60,9 +64,10 @@
 ├── examples/22_reliability.py             # 잠금 시간 초과·재시도 → 멱등 키 → 중복 방지 → 오류 분류 → 보상
 ├── examples/23_outbox_notifications.py    # 직접 호출의 사고 → 아웃박스 발송 → 장애·순서 → 중단 → 영구 실패
 ├── examples/mock_notifier.py              # 실습용 모의 발송 서비스 (멱등 키, 일시 장애, 수신 거부)
+├── examples/24_audit_feedback.py          # 요청 이후 추적 → 이력·추적 → 완전성 점검·재처리 → 피드백 → 지표
 ├── examples/dev_api_keys.yaml             # 개발용 API 키 (토큰 → 실행자)
 ├── ontologies/               # 도메인 정의 (엔진 코드 수정 없이 교체)
-│   ├── taxos/ontology.yaml       # 세무 v0.5.0: Object 9 · Link 12 · Function 4 · Action 11 · 상태 머신 3 · 정책 2
+│   ├── taxos/ontology.yaml       # 세무 v0.6.0: Object 9 · Link 12 · Function 4 · Action 11 · 상태 머신 3 · 정책 2 · 구독 1
 │   ├── taxos/functions.py        # Function 구현 (계산만, 테이블 이름 없음)
 │   ├── taxos/integrations.py     # 외부 연동: 이벤트 → 알림 메시지, 결과를 Action 으로 기록 (23장)
 │   └── northwind/ontology.yaml   # 주문·재고: Object 7 · Link 7 · Function 2
@@ -552,6 +557,41 @@ uv run python examples/23_outbox_notifications.py
 `notifications` 테이블은 기본 스키마가 아니라 `datasets/taxos/migrations/023_notifications.sql` 로 추가한다.
 `scripts/load_taxos.sh` 가 기본 데이터를 적재한 뒤 migrations 를 이름순으로 적용한다.
 
+## 감사 로그 · 이벤트 구독 (24장)
+
+```python
+from minionto.audit import AuditLog
+from minionto.subscriptions import SubscriptionRunner
+
+audit = AuditLog(onto)
+audit.object_history("DocumentSubmission", "S000005")   # 다른 객체가 대상인 실행이 바꾼 것까지
+audit.trace(execution_id)                               # 실행자 → 실행 → 상태 전이 → 이벤트 → 발송·구독
+audit.verify()                                          # 해시 체인, 전이 기록 누락, 이벤트 출처, 엔진 밖 변경
+audit.metrics()
+SubscriptionRunner(onto).run_once()                     # 정의 파일의 subscriptions 처리
+```
+
+```yaml
+subscriptions:
+  auto_start_review:
+    description: 자료가 모두 접수되면 신고서 검토를 시작한다
+    event: document_received
+    target: tax_return          # 이벤트 대상(자료) → 신고
+    action: start_review        # 시스템 실행자로, check() 가 ready 일 때만, 멱등 키 sub:<구독>:<이벤트>
+```
+
+- action_log 는 seq 순서로 해시 체인(prev_hash·row_hash)을 이룬다. 기록을 고치거나 지우면 `verify()` 가 찾는다.
+  체인을 위해 기록 시 트랜잭션 잠금으로 기록을 한 줄로 세운다(동시 실행이 많으면 병목).
+- 구독자별 처리 위치는 `minionto.event_deliveries` 에 따로 둔다 (outbox.status 는 23장 발송 작업자의 것).
+
+```bash
+uv run python -m minionto audit history ontologies/taxos/ontology.yaml TaxReturn R00006
+uv run python -m minionto audit verify ontologies/taxos/ontology.yaml
+uv run python -m minionto audit metrics ontologies/taxos/ontology.yaml
+uv run python -m minionto subscriptions run ontologies/taxos/ontology.yaml
+uv run python examples/24_audit_feedback.py
+```
+
 ## v0.1의 제약 (의도적으로 단순화)
 
 | 제약 | 영향 | 대안 |
@@ -572,7 +612,9 @@ uv run python examples/23_outbox_notifications.py
 | 개수 조회(count)는 조회 기록에 남기지 않음 | AI 가 집계로 얻은 정보는 기록되지 않음 | 집계 기록 추가 |
 | 멱등 키 재생은 저장한 응답 그대로 | 첫 요청 뒤 상태가 바뀌어도 같은 응답을 돌려줌 | 응답에 replayed 표시, 최신 상태는 다시 조회 |
 | 보상 Action 은 대상 전체를 되돌림 | 자료 요청 취소는 그 신고의 '요청됨' 자료를 모두 미요청으로 | 원래 실행(execution_id)을 입력으로 받아 그 변경만 되돌리기 |
-| outbox 상태가 소비자 하나 기준 | 발송 작업자가 published 로 바꾸면 다른 소비자가 같은 이벤트를 읽을 기준이 없음 | 24장 구독자별 처리 위치 |
+| 발송 작업자는 outbox.status, 구독은 event_deliveries | 이벤트 소비 방식이 두 가지 | 발송 작업자도 구독자로 옮기기 |
+| 엔진 밖 변경 점검은 엔진이 기록한 객체만 | 엔진이 한 번도 바꾸지 않은 객체의 직접 변경은 찾지 못함 | DB 트리거로 변경 기록, 쓰기 권한 제한 |
+| 해시 체인은 같은 DB 안 | DB 관리자가 체인 전체를 다시 계산하면 못 찾음 | 주기적으로 마지막 해시를 외부(별도 저장소)에 남기기 |
 | 외부 호출 결과는 발송 후 기록만 | 외부가 먼저 성공해야 하는 Write-back(예: 전자신고 제출)은 구현하지 않음 | 외부 먼저 호출 + 멱등 키 + 결과를 Action 으로 기록 + 대사(reconciliation) |
 | API 는 요청마다 DB 연결을 새로 엶 | 동시 요청이 많으면 연결 비용 | 커넥션 풀(psycopg_pool) |
 | Registry 는 활성 버전 하나만 서빙 | 버전별 API 동시 제공(`/v1`, `/v2`) 불가 | 서버 재시작으로 전환, 이후 버전 라우팅 |

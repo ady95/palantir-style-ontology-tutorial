@@ -144,6 +144,31 @@ ALTER TABLE {ENGINE_SCHEMA}.outbox ADD COLUMN IF NOT EXISTS attempts integer NOT
 ALTER TABLE {ENGINE_SCHEMA}.outbox ADD COLUMN IF NOT EXISTS next_attempt_at timestamptz NOT NULL DEFAULT clock_timestamp();
 ALTER TABLE {ENGINE_SCHEMA}.outbox ADD COLUMN IF NOT EXISTS last_error text;
 CREATE INDEX IF NOT EXISTS outbox_pending ON {ENGINE_SCHEMA}.outbox (next_attempt_at) WHERE status = 'pending';
+-- 감사 로그 (24장): 기록 순서(seq)와 해시 체인 — 기록을 지우거나 고치면 체인이 끊긴다
+ALTER TABLE {ENGINE_SCHEMA}.action_log ADD COLUMN IF NOT EXISTS seq bigserial;
+ALTER TABLE {ENGINE_SCHEMA}.action_log ADD COLUMN IF NOT EXISTS prev_hash text;
+ALTER TABLE {ENGINE_SCHEMA}.action_log ADD COLUMN IF NOT EXISTS row_hash text;
+CREATE INDEX IF NOT EXISTS action_log_seq ON {ENGINE_SCHEMA}.action_log (seq);
+CREATE INDEX IF NOT EXISTS action_log_changes ON {ENGINE_SCHEMA}.action_log USING gin (changes jsonb_path_ops);
+CREATE OR REPLACE FUNCTION {ENGINE_SCHEMA}.log_digest(prev text, r {ENGINE_SCHEMA}.action_log) RETURNS text
+LANGUAGE sql IMMUTABLE AS $$
+  SELECT encode(sha256(convert_to(coalesce(prev, '') || jsonb_build_object(
+      'execution_id', r.execution_id, 'action', r.action, 'object_type', r.object_type, 'target_pk', r.target_pk,
+      'actor', r.actor, 'params', r.params, 'status', r.status, 'messages', r.messages, 'changes', r.changes,
+      'approval_id', r.approval_id, 'error', r.error, 'created_at', extract(epoch FROM r.created_at))::text,
+      'UTF8')), 'hex')
+$$;
+-- 이벤트 구독 (24장): 구독자마다 어느 이벤트를 어떻게 처리했는지
+CREATE TABLE IF NOT EXISTS {ENGINE_SCHEMA}.event_deliveries (
+    subscriber   text NOT NULL,
+    event_id     bigint NOT NULL,
+    status       text NOT NULL CHECK (status IN ('done', 'skipped')),
+    result       text,
+    execution_id uuid,
+    detail       text,
+    processed_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY (subscriber, event_id)
+);
 -- 승인 워크플로 (21장): 기한과 변경 미리보기
 ALTER TABLE {ENGINE_SCHEMA}.approval_requests ADD COLUMN IF NOT EXISTS expires_at timestamptz;
 ALTER TABLE {ENGINE_SCHEMA}.approval_requests ADD COLUMN IF NOT EXISTS preview jsonb NOT NULL DEFAULT '[]';
@@ -331,9 +356,9 @@ class ActionEngine:
         from .db import database_url
         with psycopg.connect(database_url(self.client.onto, self.client._url), autocommit=True) as ddl:
             current = ddl.execute(
-                f"""SELECT to_regclass('{ENGINE_SCHEMA}.idempotency_keys') IS NOT NULL AND EXISTS (
+                f"""SELECT to_regclass('{ENGINE_SCHEMA}.event_deliveries') IS NOT NULL AND EXISTS (
                         SELECT 1 FROM information_schema.columns WHERE table_schema = '{ENGINE_SCHEMA}'
-                        AND table_name = 'outbox' AND column_name = 'next_attempt_at')""").fetchone()[0]
+                        AND table_name = 'action_log' AND column_name = 'row_hash')""").fetchone()[0]
             if not current:
                 ddl.execute("SET lock_timeout = '10s'")
                 ddl.execute(DDL)
@@ -990,3 +1015,13 @@ class ActionEngine:
             (res.execution_id, res.action, res.object_type, str(res.target), _json(actor), _json(params),
              res.status, _json(res.messages), _json(res.changes), res.approval_id,
              _json(error) if error else None))
+        # 해시 체인 (24장): 직전 기록의 해시와 이 기록의 내용으로 해시를 만든다.
+        # 기록 순서가 섞이지 않도록 트랜잭션 잠금으로 기록을 한 줄로 세운다(커밋까지 유지).
+        self.conn.execute("SELECT pg_advisory_xact_lock(hashtext('minionto:action_log'))")
+        prev = self.conn.execute(
+            f"""SELECT row_hash FROM {ENGINE_SCHEMA}.action_log WHERE row_hash IS NOT NULL
+                ORDER BY seq DESC LIMIT 1""").fetchone()
+        prev_hash = prev["row_hash"] if prev else None
+        self.conn.execute(
+            f"""UPDATE {ENGINE_SCHEMA}.action_log l SET prev_hash = %s, row_hash = {ENGINE_SCHEMA}.log_digest(%s, l)
+                WHERE execution_id = %s""", (prev_hash, prev_hash, res.execution_id))

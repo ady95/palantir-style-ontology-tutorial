@@ -318,6 +318,21 @@ class Security(Strict):
 
 
 # ---------------------------------------------------------------------------
+# Subscription: 이벤트를 받아 Action 을 실행하는 구독 (24장)
+# ---------------------------------------------------------------------------
+
+class Subscription(Strict):
+    """이벤트가 오면 시스템 실행자로 Action 을 실행한다. 실행 전에 check() 로 판단하고,
+    실행할 수 없으면(실행 조건 미달 등) 기록만 하고 건너뛴다."""
+    description: str
+    event: str = Field(description="구독할 이벤트 이름 (Action 의 emits)")
+    action: str = Field(description="실행할 Action")
+    target: str = Field("$event.target", description="이벤트 대상 객체에서 Action 대상까지의 링크 경로. "
+                                                    "$event.target 이면 이벤트 대상 그대로")
+    params: dict[str, Any] = Field(default_factory=dict, description="Action 입력 (고정 값)")
+
+
+# ---------------------------------------------------------------------------
 # 최상위
 # ---------------------------------------------------------------------------
 
@@ -342,6 +357,7 @@ class Ontology(Strict):
     functions: dict[str, Function] = Field(default_factory=dict)
     actions: dict[str, Action] = Field(default_factory=dict)
     security: Security = Field(default_factory=Security)
+    subscriptions: dict[str, Subscription] = Field(default_factory=dict)
 
 
 LinkQuantifier.model_rebuild()

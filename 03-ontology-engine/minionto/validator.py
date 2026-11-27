@@ -74,6 +74,7 @@ class Validator:
             self._action(f"actions.{name}", action)
         self._state_machines()
         self._security()
+        self._subscriptions()
         return self.r
 
     # ------------------------------------------------------------------ Object Type
@@ -263,6 +264,40 @@ class Validator:
                         self.r.error(f"{p}.{otype}", f"기본키 '{prop}' 는 감출 수 없습니다 (객체를 구별할 수 없게 됨)")
                     elif prop == ot.title_property:
                         self.r.warning(f"{p}.{otype}", f"'{prop}' 은 title_property 라 객체 이름(label)으로 드러납니다")
+
+    # ------------------------------------------------------------------ 구독 (24장)
+    def _subscriptions(self) -> None:
+        for name, sub in self.onto.subscriptions.items():
+            p = f"subscriptions.{name}"
+            sources = sorted({a.target for a in self.onto.actions.values() if sub.event in a.emits})
+            if not sources:
+                self.r.error(f"{p}.event", f"이벤트 '{sub.event}' 를 내는 Action 이 없습니다")
+            act = self.onto.actions.get(sub.action)
+            if act is None:
+                self.r.error(f"{p}.action", f"Action '{sub.action}' 이 없습니다")
+                continue
+            for src in sources:
+                if sub.target == "$event.target":
+                    reached = src
+                else:
+                    try:
+                        res = self.schema.resolve(src, sub.target)
+                    except PathError as e:
+                        self.r.error(f"{p}.target", str(e))
+                        continue
+                    if res.link is None or res.many:
+                        self.r.error(f"{p}.target", f"'{sub.target}' 는 {src} 에서 객체 하나로 가는 링크여야 합니다")
+                        continue
+                    reached = res.object_type
+                if reached != act.target:
+                    self.r.error(f"{p}.target", f"{src} 에서 '{sub.target}' 로 가면 {reached} 인데 "
+                                                f"'{sub.action}' 의 대상은 {act.target} 입니다")
+            if "system" not in act.permission.actor_types or not set(act.permission.roles) & {"시스템"}:
+                self.r.error(f"{p}.action", f"구독은 시스템 실행자(역할 시스템, 유형 system)로 실행합니다. "
+                                            f"'{sub.action}' 의 permission 에 둘을 추가하세요")
+            for key in sub.params:
+                if key not in act.parameters:
+                    self.r.error(f"{p}.params.{key}", f"'{sub.action}' 에 입력 '{key}' 가 없습니다")
 
     # ------------------------------------------------------------------ 상태 머신 (20장)
     def _state_machines(self) -> None:

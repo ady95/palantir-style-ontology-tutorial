@@ -228,6 +228,16 @@ def diff(old: Ontology, new: Ontology) -> list[Change]:
                 ch.append(Change("policy", f"security.{kind}.{name}", "보안 정책 변경"))
     if old.security.audit_reads != new.security.audit_reads:
         ch.append(Change("policy", "security.audit_reads", "조회 기록 대상 변경"))
+
+    # ---- 구독 (24장): 이벤트가 오면 무엇을 자동으로 실행하는가 → 업무 규칙
+    for name in sorted(new.subscriptions.keys() - old.subscriptions.keys()):
+        s = new.subscriptions[name]
+        ch.append(Change("policy", f"subscriptions.{name}", f"구독 추가: {s.event} → {s.action}"))
+    for name in sorted(old.subscriptions.keys() - new.subscriptions.keys()):
+        ch.append(Change("policy", f"subscriptions.{name}", "구독 삭제"))
+    for name in sorted(old.subscriptions.keys() & new.subscriptions.keys()):
+        if _dump(old.subscriptions[name]) != _dump(new.subscriptions[name]):
+            ch.append(Change("policy", f"subscriptions.{name}", "구독 변경"))
     return sorted(ch, key=lambda c: (LEVELS.index(c.level), c.path))
 
 

@@ -17,6 +17,8 @@
   python -m minionto outbox run ontologies/taxos/ontology.yaml --integrations ontologies/taxos/integrations.py \
       --notifier http://127.0.0.1:8900 [--loop]
   python -m minionto outbox requeue ontologies/taxos/ontology.yaml 6
+  python -m minionto audit history|trace|verify|metrics ontologies/taxos/ontology.yaml [대상]
+  python -m minionto subscriptions run|replay ontologies/taxos/ontology.yaml [구독]
   python -m minionto registry register ontologies/taxos/ontology.yaml --actor A001,human
   python -m minionto registry activate taxos 0.1.0 --actor A005,human
   python -m minionto serve ontologies/taxos/ontology.yaml --keys examples/dev_api_keys.yaml   (또는 --registry)
@@ -363,6 +365,48 @@ def cmd_outbox(args) -> int:
             time.sleep(args.interval)
 
 
+def cmd_audit(args) -> int:
+    from .audit import AuditLog
+    from .objects import OntologyClient
+    with OntologyClient.open(args.file, args.db_url) as client:
+        audit = AuditLog(client)
+        if args.op == "history":
+            if len(args.ref) != 2:
+                raise SystemExit("history 에는 객체 타입과 기본키가 필요합니다 (예: TaxReturn R00006)")
+            rows = audit.object_history(*args.ref)
+            print("\n".join(map(str, rows)) if rows else "(기록 없음)")
+        elif args.op == "trace":
+            if len(args.ref) != 1:
+                raise SystemExit("trace 에는 execution_id 가 필요합니다")
+            print(json.dumps(audit.trace(args.ref[0]), ensure_ascii=False, indent=2, default=str))
+        elif args.op == "verify":
+            found = audit.verify()
+            print("\n".join(map(str, found)) if found else "점검 통과: 해시 체인·상태 전이·이벤트 출처·엔진 밖 변경 모두 이상 없음")
+            return 1 if found else 0
+        else:
+            m = audit.metrics()
+            for key, rows in m.items():
+                print(f"# {key}")
+                for r in (rows if isinstance(rows, list) else [rows]):
+                    print("  " + "  ".join(f"{k}={v}" for k, v in r.items()))
+    return 0
+
+
+def cmd_subscriptions(args) -> int:
+    from .objects import OntologyClient
+    from .subscriptions import SubscriptionRunner
+    with OntologyClient.open(args.file, args.db_url, today=args.today) as client:
+        runner = SubscriptionRunner(client)
+        if args.op == "replay":
+            if not args.name:
+                raise SystemExit("replay 에는 구독 이름이 필요합니다")
+            print(f"{args.name}: 처리 기록 {runner.replay(args.name, args.from_event)}건을 지웠습니다 (다음 run 에서 다시 처리)")
+            return 0
+        rows = runner.run_once()
+        print("\n".join(map(str, rows)) if rows else "(처리할 이벤트 없음)")
+    return 0
+
+
 def cmd_serve(args) -> int:
     import uvicorn
 
@@ -528,6 +572,22 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--today")
     sp.add_argument("--db-url")
     sp.set_defaults(func=cmd_outbox)
+
+    sp = sub.add_parser("audit", help="감사 로그: 객체 이력 · 실행 추적 · 완전성 점검 · 지표 (24장)")
+    sp.add_argument("op", choices=["history", "trace", "verify", "metrics"])
+    sp.add_argument("file")
+    sp.add_argument("ref", nargs="*", help="history: 객체 타입 기본키 · trace: execution_id")
+    sp.add_argument("--db-url")
+    sp.set_defaults(func=cmd_audit)
+
+    sp = sub.add_parser("subscriptions", help="이벤트 구독 실행 · 재처리 (24장)")
+    sp.add_argument("op", choices=["run", "replay"])
+    sp.add_argument("file")
+    sp.add_argument("name", nargs="?")
+    sp.add_argument("--from-event", type=int, default=0)
+    sp.add_argument("--today")
+    sp.add_argument("--db-url")
+    sp.set_defaults(func=cmd_subscriptions)
 
     sp = sub.add_parser("decisions", help="정책 판단 기록 (21장)")
     sp.add_argument("file")
