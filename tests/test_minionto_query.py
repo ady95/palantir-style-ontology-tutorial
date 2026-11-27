@@ -190,3 +190,11 @@ def test_northwind_links(nw):
                           JOIN orders o USING (order_id) JOIN customers c USING (customer_id)
                           WHERE c.country = 'Germany'""")[0]["n"]
     assert germany == expected
+
+
+def test_engine_matches_sparql(db):
+    """PART 2 SPARQL(RDF 그래프)과 엔진(운영 DB)의 결과 ID 집합이 같다 (examples/17_compare_sparql.py)"""
+    sys.path.insert(0, str(ENGINE / "examples"))
+    compare = __import__("17_compare_sparql").compare
+    for key, (sparql, engine) in compare().items():
+        assert sparql == engine, key
