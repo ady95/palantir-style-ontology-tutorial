@@ -34,6 +34,7 @@
 │   ├── codegen.py            # SDK Generator: 메타데이터 → 타입 있는 Python SDK               [19장]
 │   ├── loader.py, cli.py
 ├── examples/17_object_link_engine.py   # PART 2 SPARQL 질문을 엔진으로 다시 풀기
+├── examples/17_compare_sparql.py       # SPARQL(RDF 그래프)과 엔진(운영 DB)의 결과 ID 집합 대조
 ├── examples/18_function_action_engine.py  # Action 실행·거부·승인 시나리오 (기본은 롤백)
 ├── examples/19_registry_api_sdk.py        # 등록→활성화 관문→API→생성 SDK (기본은 롤백)
 ├── examples/dev_api_keys.yaml             # 개발용 API 키 (토큰 → 실행자)
