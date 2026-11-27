@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, ClassVar, Generic, TypeVar
@@ -64,6 +64,7 @@ class ActionResponse:
     dry_run: bool
     execution_id: str = ""
     object_type: str = ""
+    transitions: list[dict] = field(default_factory=list)      # 20장 (이전 서버는 보내지 않음)
 
     @property
     def ok(self) -> bool:
@@ -248,13 +249,25 @@ class RemoteOntology:
         return [Record(r) for r in self.get(f"actions/{action}/candidates", limit=limit)["data"]]
 
     def apply(self, action: str, target: Any, *, params: dict | None = None,
-              dry_run: bool = False) -> ActionResponse:
-        r = self.http.post(f"{self.prefix}/actions/{action}/apply",
-                           json={"target": target, "params": params or {}, "dry_run": dry_run})
+              dry_run: bool = False, expect: dict | None = None) -> ActionResponse:
+        body = {"target": target, "params": params or {}, "dry_run": dry_run}
+        if expect:
+            body["expect"] = expect
+        r = self.http.post(f"{self.prefix}/actions/{action}/apply", json=body)
         body = self._check(r, ok=(200, 202, 403, 409, 422, 500))
         if "status" not in body:                         # Action 결과가 아닌 오류 (예: 404)
             raise SDKError(r.status_code, body)
         return ActionResponse.from_dict(body)
+
+    def available(self, object_type: str, pk: Any) -> Record:
+        """지금 이 객체에 할 수 있는 일: {state, actions: [{action, status, messages, next_state, missing}]}"""
+        body = self.get(f"objects/{object_type}/{pk}/actions")
+        body["actions"] = [Record(a) for a in body["actions"]]
+        return Record(body)
+
+    def history(self, object_type: str, pk: Any) -> list[Record]:
+        """상태 전이 이력 (오래된 것부터)"""
+        return [Record(r) for r in self.get(f"objects/{object_type}/{pk}/history")["data"]]
 
     def approvals(self) -> list[Record]:
         return [Record(r) for r in self.get("approvals")["data"]]

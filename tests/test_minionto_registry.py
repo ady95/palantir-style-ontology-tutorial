@@ -86,6 +86,20 @@ def test_link_rename_is_breaking_but_key_change_is_not():
     assert [c.level for c in ch] == ["compatible"]
 
 
+def test_state_machine_changes_are_policy():
+    def edit(r):
+        tr = r["object_types"]["TaxReturn"]["state_machine"]["transitions"]
+        tr["complete_filing"]["from"] = ["검토중", "자료수집중"]                   # 전이 변경
+        del tr["return_to_collection"]                                             # 전이 삭제
+        r["object_types"]["Customer"]["state_machine"] = {                         # 상태 머신 추가
+            "property": "business_status", "initial": ["영업"], "terminal": ["폐업"], "transitions": {}}
+    ch = {(c.level, c.path, c.message) for c in diff(BASE_PKG.onto, variant(edit).onto)}
+    sm = "object_types.TaxReturn.state_machine.transitions"
+    assert ("policy", f"{sm}.complete_filing", "전이 변경 검토중 → 신고완료  ⇒  검토중·자료수집중 → 신고완료") in ch
+    assert ("policy", f"{sm}.return_to_collection", "전이 삭제") in ch
+    assert ("policy", "object_types.Customer.state_machine", "상태 머신 추가") in ch
+
+
 def test_suggest_version():
     assert suggest_version("0.1.0", []) == "0.1.1"
     assert suggest_version("0.1.0", diff(BASE_PKG.onto, variant(

@@ -104,6 +104,29 @@ def _params(changes: list[Change], path: str, old: dict[str, Parameter], new: di
                                   f"허용 값 삭제: {', '.join(sorted(set(o.values) - set(n.values)))}"))
 
 
+def _state_machine(changes: list[Change], path: str, old, new) -> None:
+    """상태 머신은 호출 형식이 아니라 '언제 무엇을 할 수 있는가'라는 규칙이므로 policy (20장)"""
+    if old is None and new is None:
+        return
+    if old is None or new is None:
+        changes.append(Change("policy", path, "상태 머신 추가" if old is None else "상태 머신 삭제"))
+        return
+    for name in sorted(new.transitions.keys() - old.transitions.keys()):
+        t = new.transitions[name]
+        changes.append(Change("policy", f"{path}.transitions.{name}",
+                              f"전이 추가 {'·'.join(t.from_)} → {t.to}"))
+    for name in sorted(old.transitions.keys() - new.transitions.keys()):
+        changes.append(Change("policy", f"{path}.transitions.{name}", "전이 삭제"))
+    for name in sorted(old.transitions.keys() & new.transitions.keys()):
+        o, n = old.transitions[name], new.transitions[name]
+        if (o.from_, o.to) != (n.from_, n.to):
+            changes.append(Change("policy", f"{path}.transitions.{name}",
+                                  f"전이 변경 {'·'.join(o.from_)} → {o.to}  ⇒  {'·'.join(n.from_)} → {n.to}"))
+    for key in ("property", "initial", "terminal"):
+        if getattr(old, key) != getattr(new, key):
+            changes.append(Change("policy", f"{path}.{key}", f"{key} 변경"))
+
+
 def diff(old: Ontology, new: Ontology) -> list[Change]:
     """두 정의의 차이를 '사용자에게 미치는 영향' 기준으로 분류한다"""
     ch: list[Change] = []
@@ -136,6 +159,7 @@ def diff(old: Ontology, new: Ontology) -> list[Change]:
                 ch.append(Change("breaking", pp, f"enum 값 삭제: {', '.join(sorted(removed))}"))
             if added:
                 ch.append(Change("compatible", pp, f"enum 값 추가: {', '.join(sorted(added))}"))
+        _state_machine(ch, f"{p}.state_machine", o.state_machine, n.state_machine)
 
     # ---- Link Type: 사용자는 forward_name·reverse_name 으로 링크를 부른다
     for name in old.link_types.keys() - new.link_types.keys():

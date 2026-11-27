@@ -3,7 +3,7 @@
     uv run python 03-ontology-engine/examples/19_registry_api_sdk.py            # 모든 변경 롤백
     uv run python 03-ontology-engine/examples/19_registry_api_sdk.py --commit   # Registry 등록·활성화만 남김
 
-1. Registry  — 정의 등록, 활성화 관문(AI·등록자 본인 거부), AI 가 만든 v0.2.0 초안 비교, breaking 차단
+1. Registry  — 정의 등록, 활성화 관문(AI·등록자 본인 거부), AI 가 만든 초안(현재 버전의 다음 부 버전) 비교, breaking 차단
 2. API       — Registry 활성 버전을 REST API 로 서빙 (TestClient 로 호출하므로 포트가 필요 없다)
 3. SDK       — 메타데이터로 타입 SDK 를 생성하고 같은 API 를 호출
 
@@ -50,10 +50,11 @@ def section(title: str) -> None:
 
 
 def draft_v2(base: Package) -> Package:
-    """AI 가 업무 매뉴얼을 읽고 제안했다고 가정한 v0.2.0 초안"""
+    """AI 가 업무 매뉴얼을 읽고 제안했다고 가정한 초안 (taxos v0.1.0 기준이면 v0.2.0)"""
     raw = yaml.safe_load(base.source_yaml)
     raw = copy.deepcopy(raw)
-    raw["ontology"]["version"] = "0.2.0"
+    major, minor, _ = base.onto.ontology.version.split(".")
+    raw["ontology"]["version"] = f"{major}.{int(minor) + 1}.0"
     props = raw["object_types"]["Customer"]["properties"]
     props["email"] = {"type": "string", "display_name": "이메일"}                 # 속성 추가
     props.pop("phone")                                                            # 속성 삭제
@@ -78,7 +79,7 @@ def demo_registry(reg: Registry) -> Served:
         except RegistryError as e:
             print(f"  활성화 시도 — {who}: 거부 — {str(e).splitlines()[0]}")
 
-    with reg.conn.transaction(force_rollback=True):        # v0.2.0 초안은 항상 되돌린다
+    with reg.conn.transaction(force_rollback=True):        # AI 초안은 항상 되돌린다
         r2 = reg.register(draft_v2(base), actor=LLM, notes="LLM 초안: 업무 매뉴얼 기반")
         print(f"\nAI 가 초안 등록: {r2.version} — 현재 활성 v{r2.base} 대비 변경 {len(r2.changes)}건, "
               f"권장 버전 v{r2.suggested_version}")
@@ -86,7 +87,7 @@ def demo_registry(reg: Registry) -> Served:
             print("  " + str(c))
         for allow in (False, True):
             try:
-                reg.activate("taxos", "0.2.0", actor=REVIEWER, allow_breaking=allow)
+                reg.activate("taxos", r2.version.version, actor=REVIEWER, allow_breaking=allow)
                 print("  검토자 활성화: 성공")
             except RegistryError as e:
                 lines = str(e).splitlines()

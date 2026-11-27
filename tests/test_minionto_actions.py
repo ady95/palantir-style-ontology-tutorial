@@ -211,8 +211,12 @@ def test_invalid_inputs(tx):
 
 
 def test_failure_rolls_back_all_edits(tx):
-    """두 번째 edit 이 DB 제약(제출완료면 제출일 필수)을 어기면 첫 번째 edit 도 반영되지 않는다"""
+    """두 번째 edit 이 DB 제약(제출완료면 제출일 필수)을 어기면 첫 번째 edit 도 반영되지 않는다
+
+    20장부터는 상태 머신이 이 잘못된 전이를 DB 보다 먼저 막는다(test_minionto_states).
+    여기서는 DB 제약이라는 마지막 방어선을 보려고 자료의 상태 머신을 뺀다."""
     raw = yaml.safe_load(TAXOS.read_text(encoding="utf-8"))
+    raw["object_types"]["DocumentSubmission"].pop("state_machine")
     raw["actions"]["broken_submit"] = {
         "display_name": "잘못 정의된 제출 처리", "target": "TaxReturn",
         "permission": {"roles": ["세무사"]},

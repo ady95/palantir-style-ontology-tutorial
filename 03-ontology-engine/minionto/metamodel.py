@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 PropertyType = Literal["string", "integer", "decimal", "float", "boolean", "date", "datetime", "enum", "binary"]
 ParameterType = Literal["string", "integer", "decimal", "float", "boolean", "date", "datetime", "enum",
@@ -58,6 +58,28 @@ class Source(Strict):
         return self
 
 
+class Transition(Strict):
+    """하나의 Action 이 일으키는 상태 전이 (20장)"""
+    from_: list[str] = Field(alias="from", description="이 Action 을 실행할 수 있는 현재 상태")
+    to: str = Field(description="실행 후 상태")
+
+    @field_validator("from_", mode="before")
+    @classmethod
+    def _one_or_many(cls, v):
+        return [v] if isinstance(v, str) else v
+
+
+class StateMachine(Strict):
+    """enum 속성 하나를 상태로 삼아, 어떤 Action 이 어떤 상태를 어디로 바꾸는지 선언한다 (20장)
+
+    transitions 의 키는 Action 이름이다. 한 Action 은 이 객체 타입에서 하나의 상태로만 보낸다.
+    """
+    property: str = Field(description="상태를 담는 enum 속성")
+    initial: list[str] = Field(description="새 객체가 가질 수 있는 상태")
+    terminal: list[str] = Field(default_factory=list, description="더 이상 바뀌지 않는 종료 상태")
+    transitions: dict[str, Transition] = Field(description="Action 이름 → 전이")
+
+
 class ObjectType(Strict):
     display_name: str
     description: str | None = None
@@ -65,6 +87,7 @@ class ObjectType(Strict):
     title_property: str = Field(description="객체를 사람이 알아보는 대표 속성")
     properties: dict[str, Property]
     implements: list[str] = Field(default_factory=list)
+    state_machine: StateMachine | None = None
 
 
 class InterfaceProperty(Strict):

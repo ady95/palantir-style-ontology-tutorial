@@ -5,6 +5,9 @@
   python -m minionto query ontologies/taxos/ontology.yaml TaxReturn -w status=자료수집중 -p customer [--sql]
   python -m minionto call ontologies/taxos/ontology.yaml filing_delay_risk -a customer=C0008
   python -m minionto run ontologies/taxos/ontology.yaml request_missing_documents R00006 --actor agent-01,AI비서,agent
+  python -m minionto states ontologies/taxos/ontology.yaml TaxReturn [--mermaid]
+  python -m minionto available ontologies/taxos/ontology.yaml TaxReturn R00006 --actor agent-01,AI비서,agent
+  python -m minionto history ontologies/taxos/ontology.yaml TaxReturn R00006
   python -m minionto registry register ontologies/taxos/ontology.yaml --actor A001,human
   python -m minionto registry activate taxos 0.1.0 --actor A005,human
   python -m minionto serve ontologies/taxos/ontology.yaml --keys examples/dev_api_keys.yaml   (또는 --registry)
@@ -174,15 +177,20 @@ def cmd_call(args) -> int:
     return 0
 
 
-def cmd_run(args) -> int:
-    from .objects import OntologyClient
+def _actor(text: str) -> dict:
     try:
-        aid, role, atype = args.actor.split(",")
+        aid, role, atype = text.split(",")
     except ValueError:
         raise SystemExit("--actor 는 '아이디,역할,유형' 형식입니다 (예: A001,세무사,human)") from None
+    return {"id": aid, "role": role, "type": atype}
+
+
+def cmd_run(args) -> int:
+    from .objects import OntologyClient
     with OntologyClient.open(args.file, args.db_url, today=args.today) as client:
-        result = client.actions.apply(args.action, args.target, actor={"id": aid, "role": role, "type": atype},
-                                      params=_kv(args.arg), dry_run=not args.commit)
+        result = client.actions.apply(args.action, args.target, actor=_actor(args.actor),
+                                      params=_kv(args.arg), dry_run=not args.commit,
+                                      expect=_kv(args.expect) or None)
     print(result)
     if not args.commit and result.ok:
         print("(dry-run: 반영하려면 --commit)")
@@ -278,6 +286,51 @@ def cmd_sdk(args) -> int:
     return 0
 
 
+def cmd_states(args) -> int:
+    from .states import StateMachines
+    onto = _load_or_exit(args.file)
+    sm = StateMachines(onto)
+    types = [args.type] if args.type else [n for n, ot in onto.object_types.items() if ot.state_machine]
+    for i, name in enumerate(types):
+        m = sm.machine(name)
+        if m is None:
+            print(f"'{name}' 에 상태 머신이 없습니다")
+            return 1
+        if args.mermaid:
+            print(sm.mermaid(name))
+            continue
+        if i:
+            print()
+        print(f"# {name}.{m.property}  처음: {', '.join(m.initial)}  ·  종료: {', '.join(m.terminal)}")
+        for action, t in m.transitions.items():
+            print(f"  {'·'.join(t.from_):12s} → {t.to:8s} {action}")
+    return 0
+
+
+def cmd_available(args) -> int:
+    from .objects import OntologyClient
+    from .query import QueryError
+    with OntologyClient.open(args.file, args.db_url, today=args.today) as client:
+        try:
+            print(client.actions.available(args.type, args.pk, actor=_actor(args.actor)))
+        except QueryError as e:
+            print(f"오류: {e}")
+            return 1
+    return 0
+
+
+def cmd_history(args) -> int:
+    from .objects import OntologyClient
+    with OntologyClient.open(args.file, args.db_url) as client:
+        rows = client.actions.history(args.type, args.pk)
+    if not rows:
+        print("(상태 전이 기록 없음)")
+    for r in rows:
+        print(f"{str(r['created_at'])[:19]}  {r['from_state'] or '(생성)':8s} → {r['to_state']:8s} "
+              f"{r['action']:26s} {r['actor_id']} ({r['actor_type']})")
+    return 0
+
+
 def cmd_schema(args) -> int:
     text = json.dumps(Ontology.model_json_schema(by_alias=True), ensure_ascii=False, indent=2)
     if args.output:
@@ -332,9 +385,33 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--actor", required=True, help="아이디,역할,유형 (예: agent-01,AI비서,agent)")
     sp.add_argument("-a", "--arg", action="append", metavar="KEY=VALUE", help="파라미터")
     sp.add_argument("--commit", action="store_true", help="실제로 반영 (생략하면 미리보기 후 롤백)")
+    sp.add_argument("--expect", action="append", metavar="KEY=VALUE",
+                    help="읽어 둔 값 (예: status=검토중). 그사이 바뀌었으면 실행하지 않음")
     sp.add_argument("--today")
     sp.add_argument("--db-url")
     sp.set_defaults(func=cmd_run)
+
+    sp = sub.add_parser("states", help="상태 머신 보기")
+    sp.add_argument("file")
+    sp.add_argument("type", nargs="?", help="객체 타입 (생략하면 전부)")
+    sp.add_argument("--mermaid", action="store_true", help="Mermaid 상태 다이어그램으로 출력")
+    sp.set_defaults(func=cmd_states)
+
+    sp = sub.add_parser("available", help="지금 이 객체에 할 수 있는 Action")
+    sp.add_argument("file")
+    sp.add_argument("type")
+    sp.add_argument("pk")
+    sp.add_argument("--actor", required=True, help="아이디,역할,유형")
+    sp.add_argument("--today")
+    sp.add_argument("--db-url")
+    sp.set_defaults(func=cmd_available)
+
+    sp = sub.add_parser("history", help="객체의 상태 전이 이력")
+    sp.add_argument("file")
+    sp.add_argument("type")
+    sp.add_argument("pk")
+    sp.add_argument("--db-url")
+    sp.set_defaults(func=cmd_history)
 
     sp = sub.add_parser("registry", help="Ontology Registry: 버전 등록·비교·활성화")
     rsub = sp.add_subparsers(dest="op", required=True)

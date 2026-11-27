@@ -11,6 +11,7 @@ from typing import Any
 
 from .metamodel import Ontology, Parameter
 from .schema import Schema
+from .states import StateMachines
 
 
 def _param(p: Parameter) -> dict[str, Any]:
@@ -26,6 +27,7 @@ def _param(p: Parameter) -> dict[str, Any]:
 
 def public_metadata(onto: Ontology, *, version: str | None = None, checksum: str | None = None) -> dict:
     schema = Schema(onto)
+    states = StateMachines(onto)
     info = onto.ontology
     object_types = {}
     for name, ot in onto.object_types.items():
@@ -43,6 +45,11 @@ def public_metadata(onto: Ontology, *, version: str | None = None, checksum: str
             "links": {end.name: {"target": end.target, "many": end.many}
                       for end in schema.links[name].values()},
             "actions": [a for a, act in onto.actions.items() if act.target == name],
+            "state_machine": ({"property": ot.state_machine.property, "initial": ot.state_machine.initial,
+                               "terminal": ot.state_machine.terminal,
+                               "transitions": {a: {"from": t.from_, "to": t.to}
+                                               for a, t in ot.state_machine.transitions.items()}}
+                              if ot.state_machine else None),
         }
     functions = {
         name: {"display_name": fn.display_name, "description": fn.description,
@@ -55,7 +62,9 @@ def public_metadata(onto: Ontology, *, version: str | None = None, checksum: str
                "permission": {"roles": act.permission.roles, "actor_types": act.permission.actor_types},
                "approval": ({"approver_roles": act.approval.approver_roles, "reason": act.approval.reason}
                             if act.approval else None),
-               "emits": act.emits}
+               "emits": act.emits,
+               "transitions": [{"object_type": r.object_type, "property": r.property,
+                                "from": list(r.from_), "to": r.to} for r in states.rules_for_action(name)]}
         for name, act in onto.actions.items()}
     return {
         "name": info.name, "version": version or info.version, "checksum": checksum,

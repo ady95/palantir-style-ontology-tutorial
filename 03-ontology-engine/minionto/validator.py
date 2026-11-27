@@ -5,6 +5,7 @@
 - 비교 대상 경로가 단일 값인가 (여러 개로 갈라지는 경로는 some/none 을 써야 한다)
 - enum 속성에 허용되지 않은 값을 쓰지 않았는가
 - Action 이 새 객체를 만들 때 필수 속성을 모두 채우는가
+- 상태 머신(20장)과 Action 의 edits 가 서로 맞는가
 """
 
 from __future__ import annotations
@@ -70,6 +71,7 @@ class Validator:
         self._functions()
         for name, action in self.onto.actions.items():
             self._action(f"actions.{name}", action)
+        self._state_machines()
         return self.r
 
     # ------------------------------------------------------------------ Object Type
@@ -228,6 +230,99 @@ class Validator:
                 self.r.error(f"{p}.{key}", "기본키는 수정할 수 없습니다")
             self._value(f"{p}.{key}", value, prop, action)
 
+    # ------------------------------------------------------------------ 상태 머신 (20장)
+    def _state_machines(self) -> None:
+        # 1) 선언 자체: 상태 값, 도달 가능성, 종료 상태
+        for tname, ot in self.onto.object_types.items():
+            m = ot.state_machine
+            if m is None:
+                continue
+            p = f"object_types.{tname}.state_machine"
+            prop = ot.properties.get(m.property)
+            if prop is None or prop.type != "enum":
+                self.r.error(f"{p}.property", f"'{m.property}' 은 {tname} 의 enum 속성이어야 합니다")
+                continue
+            states = prop.values
+            for key, values in (("initial", m.initial), ("terminal", m.terminal)):
+                for v in values:
+                    if v not in states:
+                        self.r.error(f"{p}.{key}", f"'{v}' 는 {m.property} 의 값이 아닙니다 ({', '.join(states)})")
+            reach, leave = set(m.initial), set()
+            for aname, t in m.transitions.items():
+                tp = f"{p}.transitions.{aname}"
+                for v in [*t.from_, t.to]:
+                    if v not in states:
+                        self.r.error(tp, f"'{v}' 는 {m.property} 의 값이 아닙니다 ({', '.join(states)})")
+                for v in t.from_:
+                    if v in m.terminal:
+                        self.r.error(tp, f"종료 상태 '{v}' 에서 나가는 전이입니다")
+                reach.add(t.to)
+                leave.update(t.from_)
+                act = self.onto.actions.get(aname)
+                if act is None:
+                    self.r.error(tp, f"Action '{aname}' 이 없습니다")
+                elif not self._sets_state(act, tname, m.property):
+                    self.r.error(tp, f"Action '{aname}' 은 {tname}.{m.property} 을 바꾸지 않습니다")
+            for v in states:
+                if v not in reach:
+                    self.r.warning(p, f"상태 '{v}' 에 도달할 수 없습니다 (initial 에도, 어떤 전이의 to 에도 없음)")
+                elif v not in m.terminal and v not in leave:
+                    self.r.warning(p, f"상태 '{v}' 에서 나가는 전이가 없습니다. 끝나는 상태라면 terminal 에 넣으세요")
+
+        # 2) Action 쪽: 상태 속성을 바꾸는 모든 변경이 선언된 전이인가
+        for aname, act in self.onto.actions.items():
+            if act.target not in self.onto.object_types:
+                continue
+            for i, edit in enumerate(act.edits):
+                otype = self._edit_type(act, edit)
+                ot = self.onto.object_types.get(otype) if otype else None
+                m = ot.state_machine if ot else None
+                values = edit.values if edit.create is not None else edit.set
+                if m is None or m.property not in (values or {}):
+                    continue
+                ep, value = f"actions.{aname}.edits[{i}]", values[m.property]
+                if isinstance(value, str) and value.startswith("$"):
+                    self.r.error(ep, f"상태 속성 {otype}.{m.property} 에는 고정 값을 써야 합니다 ({value})")
+                    continue
+                if edit.create is not None:
+                    if value not in m.initial:
+                        self.r.error(ep, f"새 {otype} 의 상태 '{value}' 는 initial({', '.join(m.initial)})에 없습니다")
+                    continue
+                t = m.transitions.get(aname)
+                if t is None:
+                    self.r.error(ep, f"{otype}.{m.property} 을 바꾸지만 {otype} 의 상태 머신에 '{aname}' 전이가 없습니다")
+                    continue
+                if value != t.to:
+                    self.r.error(ep, f"상태 머신은 '{aname}' → {t.to} 인데 '{value}' 로 바꿉니다")
+                if edit.update_linked is not None:
+                    allowed = _state_filter(edit.where, m.property)
+                    if allowed is None:
+                        self.r.error(f"{ep}.where", f"링크 객체의 시작 상태를 where 의 {m.property} 조건(eq·in)으로 "
+                                                    f"제한해야 합니다 (전이 from: {', '.join(t.from_)})")
+                    elif allowed - set(t.from_):
+                        self.r.error(f"{ep}.where", f"where 가 허용하는 {', '.join(sorted(allowed - set(t.from_)))} "
+                                                    f"는 전이의 from 에 없습니다")
+
+            # 3) 상태 머신이 이미 검사하는 조건을 실행 조건에 또 쓰면 알려 준다
+            m = self.onto.object_types[act.target].state_machine
+            if m and aname in m.transitions:
+                for i, rule in enumerate(act.preconditions):
+                    if rule.check.field == m.property and rule.check.op in ("eq", "in"):
+                        self.r.warning(f"actions.{aname}.preconditions[{i}]",
+                                       f"상태 머신이 이미 검사하는 조건입니다 ({m.property} ∈ {', '.join(m.transitions[aname].from_)})")
+
+    def _edit_type(self, act: Action, edit: Edit) -> str | None:
+        if edit.update is not None:
+            return act.target
+        if edit.update_linked is not None:
+            end = self.schema.links[act.target].get(edit.update_linked)
+            return end.target if end else None
+        return edit.create
+
+    def _sets_state(self, act: Action, otype: str, prop: str) -> bool:
+        return any(edit.create is None and self._edit_type(act, edit) == otype and prop in (edit.set or {})
+                   for edit in act.edits)
+
     # ------------------------------------------------------------------ 조건식
     def _condition(self, p: str, c: Condition, obj: str, action: Action) -> None:
         if c.all_ is not None or c.any_ is not None:
@@ -327,6 +422,19 @@ class Validator:
         if param and param.type == "enum":
             return Property(type="enum", values=param.values)
         return None
+
+
+def _state_filter(where: Condition | None, prop: str) -> set | None:
+    """update_linked 의 where 가 상태 속성을 어떤 값들로 제한하는가 (eq·in, all 안까지). 모르면 None"""
+    if where is None:
+        return None
+    if where.field == prop and where.op in ("eq", "in"):
+        return set(where.value) if where.op == "in" else {where.value}
+    for sub in where.all_ or []:
+        found = _state_filter(sub, prop)
+        if found is not None:
+            return found
+    return None
 
 
 def _compatible(a: str, b: str) -> bool:

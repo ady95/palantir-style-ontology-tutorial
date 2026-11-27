@@ -6,7 +6,7 @@
 
 ontology:
   name: taxos
-  version: 0.1.0
+  version: 0.2.0
   display_name: 세무 사무소 운영 온톨로지
   description: 고객·신고·필수 자료·업무를 객체로 정의하고, 자료 요청·담당자 배정 같은 업무를 Action으로 실행한다.
 
@@ -73,6 +73,16 @@ object_types:
       due_date:    { type: date, required: true, display_name: 신고 기한 }
       status:      { type: enum, values: [자료수집중, 검토중, 신고완료, 기한후신고], required: true }
       filed_at:    { type: date, display_name: 신고일 }
+    # 상태 머신 (20장): 어떤 Action 이 어떤 상태를 어디로 바꾸는가. 여기 없는 전이는 엔진이 막는다.
+    state_machine:
+      property: status
+      initial: [자료수집중]
+      terminal: [신고완료, 기한후신고]
+      transitions:
+        start_review:         { from: 자료수집중, to: 검토중 }
+        return_to_collection: { from: 검토중,     to: 자료수집중 }
+        complete_filing:      { from: 검토중,     to: 신고완료 }
+        file_late:            { from: 검토중,     to: 기한후신고 }
 
   DocumentType:
     display_name: 필수 자료 유형
@@ -98,6 +108,13 @@ object_types:
       status:        { type: enum, values: [미요청, 요청됨, 제출완료, 해당없음], required: true }
       requested_at:  { type: date }
       submitted_at:  { type: date }
+    state_machine:
+      property: status
+      initial: [미요청, 해당없음]            # 해당없음: 이 신고에는 필요 없는 자료 (처음부터 정해진다)
+      terminal: [제출완료, 해당없음]
+      transitions:
+        request_missing_documents:  { from: 미요청,          to: 요청됨 }
+        record_document_submission: { from: [미요청, 요청됨], to: 제출완료 }
 
   Consultation:
     display_name: 상담 이력
@@ -128,6 +145,15 @@ object_types:
       created_by:  { type: enum, values: [human, agent, system], required: true }
       created_at:  { type: datetime, required: true }
       note:        { type: string }
+    state_machine:
+      property: status
+      initial: [대기, 진행중, 완료]           # 완료: 기록용으로 끝난 상태로 만드는 업무 (담당자배정)
+      terminal: [완료, 취소]
+      transitions:
+        start_review:         { from: [대기, 진행중], to: 완료 }     # 자료요청 업무를 닫는다
+        complete_filing:      { from: [대기, 진행중], to: 완료 }     # 신고서검토 업무를 닫는다
+        file_late:            { from: [대기, 진행중], to: 완료 }
+        return_to_collection: { from: [대기, 진행중], to: 취소 }
 
   RiskEvent:
     display_name: 위험 이벤트
@@ -313,11 +339,11 @@ actions:
   complete_filing:
     display_name: 신고 완료 처리
     target: TaxReturn
-    preconditions:
-      - message: 검토중인 신고만 완료 처리할 수 있습니다.
-        check: { field: status, op: eq, value: 검토중 }
+    preconditions:                       # '검토중인 신고만'은 상태 머신이 검사한다 (20장)
       - message: 아직 제출되지 않은 자료가 있습니다.
         check: { none: { link: submissions, where: { field: status, op: in, value: [미요청, 요청됨] } } }
+      - message: 신고 기한이 지났습니다. 기한후신고(file_late)로 처리하세요.
+        check: { field: due_date, op: gte, value: $today }
     permission:
       roles: [세무사]
       actor_types: [human]
@@ -331,3 +357,110 @@ actions:
             - { field: status, op: in, value: [대기, 진행중] }
         set: { status: 완료 }
     emits: [tax_return_filed]
+
+  # ---- 20장: 신고 업무의 상태 전이를 끝까지 진행하기 위한 Action
+  record_document_submission:
+    display_name: 자료 접수
+    description: 고객이 보낸 자료를 받아 제출완료로 기록한다.
+    target: DocumentSubmission
+    preconditions:
+      - message: 자료수집중인 신고의 자료만 접수합니다.
+        check: { field: tax_return.status, op: eq, value: 자료수집중 }
+    permission:
+      roles: [세무사, 실무자]
+      actor_types: [human]
+      check:
+        any:
+          - { field: $actor.role, op: eq, value: 세무사 }
+          - { field: tax_return.customer.accountant_id, op: eq, value: $actor.id }
+    edits:
+      - update: target
+        set: { status: 제출완료, submitted_at: $today }
+    emits: [document_received]
+
+  start_review:
+    display_name: 신고서 검토 시작
+    description: 자료가 모두 모인 신고를 검토 단계로 넘기고, 자료요청 업무를 닫고, 신고서검토 업무를 만든다.
+    target: TaxReturn
+    preconditions:
+      - message: 아직 제출되지 않은 자료가 있습니다.
+        check: { none: { link: submissions, where: { field: status, op: in, value: [미요청, 요청됨] } } }
+    permission:
+      roles: [세무사, 실무자, AI비서]
+      check:
+        any:
+          - { field: $actor.role, op: in, value: [세무사, AI비서] }
+          - { field: customer.accountant_id, op: eq, value: $actor.id }
+    edits:
+      - update: target
+        set: { status: 검토중 }
+      - update_linked: tasks
+        where:
+          all:
+            - { field: task_type, op: eq, value: 자료요청 }
+            - { field: status, op: in, value: [대기, 진행중] }
+        set: { status: 완료 }
+      - create: Task
+        values:
+          customer_id: $target.customer_id
+          return_id:   $target.return_id
+          task_type:   신고서검토
+          assignee_id: $target.customer.accountant_id
+          status:      대기
+          due_date:    $target.due_date
+          created_by:  $actor.type
+          created_at:  $now
+    emits: [review_started]
+
+  return_to_collection:
+    display_name: 자료 보완 요청
+    description: 검토 중 자료가 부족하면 신고를 자료수집 단계로 되돌리고, 고객 연락 업무를 만든다.
+    target: TaxReturn
+    parameters:
+      reason: { type: string, description: 보완이 필요한 이유 (고객 연락 업무에 남는다) }
+    permission:
+      roles: [세무사]
+      actor_types: [human]
+    edits:
+      - update: target
+        set: { status: 자료수집중 }
+      - update_linked: tasks
+        where:
+          all:
+            - { field: task_type, op: eq, value: 신고서검토 }
+            - { field: status, op: in, value: [대기, 진행중] }
+        set: { status: 취소 }
+      - create: Task
+        values:
+          customer_id: $target.customer_id
+          return_id:   $target.return_id
+          task_type:   고객연락
+          assignee_id: $target.customer.accountant_id
+          status:      대기
+          due_date:    $target.due_date
+          created_by:  $actor.type
+          created_at:  $now
+          note:        $params.reason
+    emits: [review_returned]
+
+  file_late:
+    display_name: 기한후신고 처리
+    target: TaxReturn
+    preconditions:
+      - message: 아직 제출되지 않은 자료가 있습니다.
+        check: { none: { link: submissions, where: { field: status, op: in, value: [미요청, 요청됨] } } }
+      - message: 신고 기한이 지나지 않았습니다. 신고 완료(complete_filing)로 처리하세요.
+        check: { field: due_date, op: lt, value: $today }
+    permission:
+      roles: [세무사]
+      actor_types: [human]
+    edits:
+      - update: target
+        set: { status: 기한후신고, filed_at: $today }
+      - update_linked: tasks
+        where:
+          all:
+            - { field: task_type, op: eq, value: 신고서검토 }
+            - { field: status, op: in, value: [대기, 진행중] }
+        set: { status: 완료 }
+    emits: [tax_return_filed_late]

@@ -13,6 +13,11 @@
 | 17 | Object Engine · Link Engine (조회·관계 탐색) | ✅ v0.1 |
 | 18 | Function Engine · Action Engine (계산·검증된 실행·승인·감사) | ✅ v0.1 |
 | 19 | Ontology Registry · API · SDK (버전 관리·REST API·타입 SDK 생성) | ✅ v0.1 |
+| 20 | 상태 머신 · 상태 전이 강제 · 동시 변경 감지 · 지금 가능한 Action 조회 | ✅ v0.1 |
+
+> 20장에서 세무 정의(taxos)를 v0.2.0 으로 올렸습니다(상태 머신과 Action 4개 추가).
+> 15~19장 원고의 출력(체크섬·줄 수·Action 목록 등)은 v0.1.0 기준이며, 그 상태는 태그 `part4` 로 볼 수 있습니다.
+> `git checkout part4`
 
 ## 구조
 
@@ -32,14 +37,16 @@
 │   ├── api.py                # FastAPI: 객체·링크·Function·Action·승인 엔드포인트              [19장]
 │   ├── sdk.py                # 원격 클라이언트 (httpx 만 사용, 로컬 ObjectSet 과 같은 모양)    [19장]
 │   ├── codegen.py            # SDK Generator: 메타데이터 → 타입 있는 Python SDK               [19장]
+│   ├── states.py             # 상태 머신: 전이 규칙 조회, Mermaid 다이어그램                   [20장]
 │   ├── loader.py, cli.py
 ├── examples/17_object_link_engine.py   # PART 2 SPARQL 질문을 엔진으로 다시 풀기
 ├── examples/17_compare_sparql.py       # SPARQL(RDF 그래프)과 엔진(운영 DB)의 결과 ID 집합 대조
 ├── examples/18_function_action_engine.py  # Action 실행·거부·승인 시나리오 (기본은 롤백)
 ├── examples/19_registry_api_sdk.py        # 등록→활성화 관문→API→생성 SDK (기본은 롤백)
+├── examples/20_state_transitions.py       # 지금 가능한 Action → 신고 업무 상태 전이 → 동시 변경 감지
 ├── examples/dev_api_keys.yaml             # 개발용 API 키 (토큰 → 실행자)
 ├── ontologies/               # 도메인 정의 (엔진 코드 수정 없이 교체)
-│   ├── taxos/ontology.yaml       # 세무: Object 8 · Link 10 · Function 4 · Action 4
+│   ├── taxos/ontology.yaml       # 세무 v0.2.0: Object 8 · Link 10 · Function 4 · Action 8 · 상태 머신 3
 │   ├── taxos/functions.py        # Function 구현 (계산만, 테이블 이름 없음)
 │   └── northwind/ontology.yaml   # 주문·재고: Object 7 · Link 7 · Function 2
 └── schema/minionto.schema.json   # 에디터 자동완성용 JSON Schema
@@ -384,6 +391,52 @@ uv run python examples/19_registry_api_sdk.py            # Registry·API·SDK �
 uv run python examples/19_registry_api_sdk.py --commit   # Registry 등록·활성화만 남김
 ```
 
+## 상태 머신과 상태 전이 (20장)
+
+enum 속성 하나를 상태로 정하고, **어떤 Action 이 어떤 상태를 어디로 바꾸는지** 객체 타입 아래에 선언합니다.
+여기 없는 전이는 엔진이 막습니다.
+
+```yaml
+  TaxReturn:
+    ...
+    state_machine:
+      property: status
+      initial: [자료수집중]
+      terminal: [신고완료, 기한후신고]
+      transitions:                                   # Action 이름 → 전이
+        start_review:         { from: 자료수집중, to: 검토중 }
+        return_to_collection: { from: 검토중,     to: 자료수집중 }
+        complete_filing:      { from: 검토중,     to: 신고완료 }
+        file_late:            { from: 검토중,     to: 기한후신고 }
+```
+
+엔진이 하는 일
+
+| 시점 | 동작 |
+|---|---|
+| 정의 검증 | Action 의 edits 가 상태를 바꾸면 전이가 선언되어 있는지, to 와 값이 같은지, 링크 객체는 where 로 시작 상태를 제한했는지, 새 객체는 initial 상태인지, 종료 상태에서 나가는 전이가 없는지 |
+| 실행 전 | 대상의 현재 상태가 from 에 없으면 rejected — 다른 실행 조건의 실패 사유와 **함께** 돌려준다. `candidates()` 도 시작 상태를 조회 조건으로 쓴다 |
+| 변경 시 | 바꿀 행을 `FOR UPDATE` 로 잠그고 다시 읽어 **동시 변경을 감지**하고, 링크 객체까지 모든 상태 변경이 선언된 전이인지 다시 확인한다. 어긋나면 전체 롤백 (rejected) |
+| 변경 후 | 일어난 전이를 `minionto.state_transitions` 에 기록 (`actions.history(type, pk)`) |
+
+```python
+onto.actions.available("TaxReturn", "R00006", actor=AI)      # 지금 할 수 있는 일 (아무것도 바꾸지 않음)
+onto.actions.check("return_to_collection", "R00006", actor=TAX)   # → needs_input (reason)
+onto.actions.apply("complete_filing", "R00006", actor=TAX, expect={"status": "검토중"})   # 읽은 뒤 바뀌었으면 rejected
+onto.actions.history("TaxReturn", "R00006")
+```
+
+```bash
+uv run python -m minionto states ontologies/taxos/ontology.yaml TaxReturn --mermaid
+uv run python -m minionto available ontologies/taxos/ontology.yaml TaxReturn R00006 --actor agent-01,AI비서,agent --today 2027-01-18
+uv run python -m minionto run ontologies/taxos/ontology.yaml complete_filing R00024 --actor A001,세무사,human --expect status=검토중
+uv run python -m minionto history ontologies/taxos/ontology.yaml TaxReturn R00006
+uv run python examples/20_state_transitions.py
+```
+
+API: `GET .../objects/{type}/{pk}/actions`, `GET .../objects/{type}/{pk}/history`, apply 요청의 `expect`.
+SDK: `sdk.available()`, `sdk.history()`, Action 메서드의 `expect=` 인자, 독스트링의 상태 전이.
+
 ## v0.1의 제약 (의도적으로 단순화)
 
 | 제약 | 영향 | 대안 |
@@ -395,7 +448,9 @@ uv run python examples/19_registry_api_sdk.py --commit   # Registry 등록·활�
 | 링크 개수와 속성 비교 불가 | "담당 고객 수 > max_workload" 를 조건식으로 못 씀 | `count_by` 후 판단, 또는 Function (`has_capacity`) |
 | 객체 링크 접근은 매번 질의 | `for r in returns: r.customer` 는 N+1 질의 | 표가 필요하면 `rows("customer.company_name")` 로 한 번에 |
 | 승인 요청에 만료 시간이 없음 | 오래된 요청이 남음 | 21장 승인 워크플로에서 기한·알림 추가 |
-| 변경 이력(before)은 action_log 에만 | 객체별 이력 조회가 불편 | 24장 감사 로그에서 객체 이력 뷰 |
+| 상태 전이 외의 변경 이력(before)은 action_log 에만 | 객체별 속성 이력 조회가 불편 | 24장 감사 로그에서 객체 이력 뷰 |
+| 상태 머신은 enum 속성 하나, 전이 조건은 Action 의 실행 조건으로 | 병렬 상태(예: 신고 상태 × 납부 상태)는 따로 선언 | 속성마다 별도 객체로 나누거나 이후 확장 |
+| SQL 로 DB 를 직접 바꾸면 상태 머신을 거치지 않음 | 엔진 밖 변경은 막지 못함 (다음 Action 에서 동시 변경으로 감지될 뿐) | DB 트리거로 전이 표를 강제하거나 쓰기 권한을 엔진 계정으로 제한 |
 | `pk`·`label` 등은 예약 이름 | 같은 이름의 속성은 `obj["pk"]` 로 읽음 | 검증기가 경고 |
 | API 키는 개발용 고정 파일 | 키 회전·만료·권한 범위 없음 | 21장 인증·정책 엔진 |
 | API 는 요청마다 DB 연결을 새로 엶 | 동시 요청이 많으면 연결 비용 | 커넥션 풀(psycopg_pool) |

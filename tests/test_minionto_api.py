@@ -193,3 +193,38 @@ def test_generated_sdk_end_to_end(api, tmp_path):
 
     plain = RemoteOntology("http://testserver", "taxos", token="dev-ai-agent", http=api)
     assert plain.objects("Customer").limit(1).first()["customer_id"]       # 타입 없는 SDK 는 dict
+
+
+# ================================================================ 20장: 상태 전이
+def test_available_and_expect_over_api(api, tmp_path):
+    ret = api.engine.objects("TaxReturn").where(status="검토중").order_by("return_id").first().pk
+    av = api.get(f"{P}/objects/TaxReturn/{ret}/actions", headers=TAX).json()
+    assert av["state"]["value"] == "검토중" and av["state"]["terminal"] is False
+    status = {a["action"]: a["status"] for a in av["actions"]}
+    assert status["complete_filing"] == "ready" and status["return_to_collection"] == "needs_input"
+    assert api.get(f"{P}/objects/TaxReturn/R99999/actions", headers=TAX).status_code == 404
+
+    stale = api.post(f"{P}/actions/complete_filing/apply", headers=TAX,
+                     json={"target": ret, "expect": {"status": "자료수집중"}})
+    assert stale.status_code == 409 and stale.json()["status"] == "rejected"
+    done = api.post(f"{P}/actions/complete_filing/apply", headers=TAX,
+                    json={"target": ret, "expect": {"status": "검토중"}})
+    assert done.status_code == 200
+    assert {"object_type": "TaxReturn", "pk": ret, "property": "status", "from": "검토중", "to": "신고완료"} \
+        in done.json()["transitions"]
+    hist = api.get(f"{P}/objects/TaxReturn/{ret}/history", headers=TAX).json()["data"]
+    assert [(h["from_state"], h["to_state"]) for h in hist] == [("검토중", "신고완료")]
+
+    # SDK: 상태 머신이 독스트링에, available·history·expect 가 메서드로
+    code = generate(metadata_from_file(str(TAXOS)))
+    assert "상태 전이: TaxReturn.status 검토중 → 신고완료" in code
+    out = tmp_path / "taxos_sdk20.py"
+    out.write_text(code, encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("taxos_sdk20", out)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["taxos_sdk20"] = mod
+    spec.loader.exec_module(mod)
+    sdk = mod.TaxosClient("http://testserver", token="dev-tax-accountant", http=api)
+    assert sdk.available("TaxReturn", ret).state["terminal"] is True
+    assert sdk.history("TaxReturn", ret)[0].to_state == "신고완료"
+    assert sdk.complete_filing(ret, expect={"status": "검토중"}).status == "rejected"

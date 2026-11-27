@@ -10,12 +10,15 @@
   0. 입력 검사       파라미터 타입·필수·enum, 대상 객체 존재
   1. 대상 잠금       SELECT … FOR UPDATE — 같은 대상에 대한 동시 실행을 줄 세운다
   2. 권한            역할 · 실행 주체 유형(human/agent) · 추가 조건(본인 담당 고객만 등)
-  3. 실행 조건       업무 규칙. 실패한 규칙의 message 를 모두 돌려준다
+  3. 실행 조건       상태 전이(20장) + 업무 규칙. 실패한 사유를 모두 돌려준다
+                     expect 를 주면 대상이 읽은 뒤 바뀌지 않았는지도 확인한다
   4. 승인            required_if 가 참이면 실행하지 않고 승인 요청만 남긴다
   5. 변경            edits 를 순서대로 실행 (update · update_linked · create)
-  6. 이벤트·감사     outbox 에 이벤트, action_log 에 실행 기록 — 변경과 함께 커밋된다
+                     바꿀 행을 잠그고 다시 읽어 동시 변경을 감지하고, 상태 전이를 다시 확인한다
+  6. 이벤트·감사     outbox 에 이벤트, action_log 에 실행 기록, state_transitions 에 상태 전이
 어느 단계에서든 DB 오류가 나면 전체가 롤백되고, 실패 기록만 따로 남는다.
 dry_run=True 이면 전 과정을 실행한 뒤 롤백한다 (AI 에이전트의 '실행 전 미리보기').
+check()·available() 은 변경 없이 '지금 실행하면 어떻게 되는지'만 알려 준다 (20장).
 """
 
 from __future__ import annotations
@@ -33,6 +36,7 @@ from psycopg.types.json import Jsonb
 from .functions import FunctionError
 from .metamodel import Action, Condition, Edit
 from .query import QueryError, coerce
+from .states import StateMachines
 
 if TYPE_CHECKING:
     from .objects import ObjectSet, OntologyClient, OntoObject
@@ -82,6 +86,21 @@ CREATE TABLE IF NOT EXISTS {ENGINE_SCHEMA}.outbox (
     created_at   timestamptz NOT NULL DEFAULT clock_timestamp(),
     published_at timestamptz
 );
+-- 상태 전이 기록 (20장): 객체별 상태 이력
+CREATE TABLE IF NOT EXISTS {ENGINE_SCHEMA}.state_transitions (
+    transition_id bigserial PRIMARY KEY,
+    execution_id  uuid NOT NULL,
+    action        text NOT NULL,
+    object_type   text NOT NULL,
+    target_pk     text NOT NULL,
+    property      text NOT NULL,
+    from_state    text,
+    to_state      text NOT NULL,
+    actor         jsonb NOT NULL,
+    created_at    timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+CREATE INDEX IF NOT EXISTS state_transitions_object
+    ON {ENGINE_SCHEMA}.state_transitions (object_type, target_pk);
 -- 이전 버전에서 만든 테이블도 같은 기본값을 쓰도록
 ALTER TABLE {ENGINE_SCHEMA}.action_log        ALTER COLUMN created_at SET DEFAULT clock_timestamp();
 ALTER TABLE {ENGINE_SCHEMA}.approval_requests ALTER COLUMN created_at SET DEFAULT clock_timestamp();
@@ -106,6 +125,14 @@ class ActionStop(Exception):
         self.status, self.messages = status, messages
 
 
+class StateConflict(Exception):
+    """변경 도중 발견한 상태 문제 — 허용되지 않은 전이, 다른 트랜잭션의 동시 변경.
+    이미 일부 변경을 했을 수 있으므로 ActionStop 과 달리 트랜잭션 전체를 롤백한다 (결과는 rejected)."""
+    def __init__(self, messages: list[str]):
+        super().__init__("; ".join(messages))
+        self.messages = messages
+
+
 @dataclass
 class ActionResult:
     status: str                 # completed | approval_required | rejected | denied | invalid | failed
@@ -118,6 +145,7 @@ class ActionResult:
     events: list[str] = field(default_factory=list)
     approval_id: str | None = None
     dry_run: bool = False
+    transitions: list[dict] = field(default_factory=list)     # 20장: 이 실행이 일으킨 상태 전이
 
     @property
     def ok(self) -> bool:
@@ -138,6 +166,57 @@ class ActionResult:
         return "\n".join(lines)
 
 
+@dataclass
+class ActionCheck:
+    """check() 결과 — 실행하지 않고 판단만 한다"""
+    action: str
+    display_name: str
+    status: str                 # ready | approval_required | needs_input | rejected | denied | invalid
+    messages: list[str] = field(default_factory=list)
+    next_state: str | None = None
+    missing: list[str] = field(default_factory=list)      # 아직 받지 못한 필수 입력
+
+    @property
+    def ok(self) -> bool:
+        """지금 실행할 수 있는가 (승인 요청으로 이어지는 경우 포함)"""
+        return self.status in ("ready", "approval_required")
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    def __str__(self) -> str:
+        nxt = f" → {self.next_state}" if self.next_state else ""
+        lines = [f"{self.status:17s} {self.action}{nxt}"]
+        return "\n".join(lines + [f"{'':19s}- {m}" for m in self.messages])
+
+
+@dataclass
+class Availability:
+    """available() 결과 — 한 객체에 대해 지금 할 수 있는 일"""
+    object_type: str
+    pk: Any
+    state: dict | None           # {property, value, terminal, next: {action: 다음 상태}}
+    actions: list[ActionCheck]
+
+    def to_dict(self) -> dict:
+        return json.loads(json.dumps(asdict(self), ensure_ascii=False, default=str))
+
+    def __str__(self) -> str:
+        head = f"{self.object_type}({self.pk})"
+        if self.state:
+            head += f" — {self.state['property']}: {self.state['value']}" + \
+                (" (종료 상태)" if self.state["terminal"] else "")
+        return "\n".join([head] + [str(c) for c in self.actions])
+
+
+def _uses_params(c: Condition | None, names: list[str]) -> bool:
+    """조건식이 아직 받지 못한 파라미터($params.x)를 참조하는가"""
+    if c is None or not names:
+        return False
+    text = c.model_dump_json(by_alias=True)
+    return any(f"$params.{n}" in text for n in names)
+
+
 def _has_function(c: Condition | None) -> bool:
     if c is None:
         return False
@@ -150,6 +229,7 @@ def _has_function(c: Condition | None) -> bool:
 class ActionEngine:
     def __init__(self, client: OntologyClient):
         self.client = client
+        self.states = StateMachines(client.onto)
         self._ready = False
 
     @property
@@ -163,7 +243,8 @@ class ActionEngine:
 
     # ================================================================== 실행
     def apply(self, action: str, target: Any, *, actor: dict, params: dict | None = None,
-              dry_run: bool = False, _approval: str | None = None) -> ActionResult:
+              dry_run: bool = False, expect: dict | None = None, _approval: str | None = None) -> ActionResult:
+        """expect: {"status": "검토중"} 처럼 실행자가 읽어 둔 값. 그사이 바뀌었으면 rejected (20장)"""
         self.ensure_tables()
         act = self.client.onto.actions.get(action)
         if act is None:
@@ -182,7 +263,9 @@ class ActionEngine:
                     params_ = self._check_params(act, params_in)
                     target_set = self._lock_target(act, target, params_, actor)
                     self._check_permission(act, target_set, params_, actor)
-                    self._check_preconditions(act, target_set, params_, actor)
+                    if expect:
+                        self._check_expect(target_set, expect)
+                    self._check_preconditions(action, act, target_set, params_, actor)
                     if _approval is None and act.approval and \
                             self.evaluate(act.approval.required_if, target_set, params_, actor):
                         res.approval_id = self._request_approval(act, action, target, actor, params_)
@@ -190,18 +273,21 @@ class ActionEngine:
                                          [act.approval.reason or "승인이 필요합니다",
                                           f"승인자 역할: {', '.join(act.approval.approver_roles)}"])
                     for edit in act.edits:
-                        res.changes += self._apply_edit(act, edit, target_set, params_, actor)
+                        res.changes += self._apply_edit(act, edit, target_set, params_, actor, res)
+                    self._record_transitions(res, actor)
                     res.events = self._emit(act, res, target, params_, actor)
                     res.messages.append(f"{len(res.changes)}건 변경" + (" (dry-run: 롤백됨)" if dry_run else ""))
                 except ActionStop as stop:
                     res.status, res.messages = stop.status, stop.messages
                 self._log(res, actor, params_in)
         except Exception as e:  # noqa: BLE001 — 트랜잭션은 이미 롤백됨. 실패 기록만 따로 남긴다
-            if isinstance(e, (FunctionError, QueryError)):
+            if isinstance(e, StateConflict):
+                res.status, res.messages = "rejected", e.messages        # 허용되지 않은 전이·동시 변경
+            elif isinstance(e, (FunctionError, QueryError)):
                 res.status, res.messages = "invalid", [str(e)]           # 정의·입력 문제
             else:
                 res.status, res.messages = "failed", [f"{type(e).__name__}: {e}"]   # DB 제약 위반 등
-            res.changes, res.events = [], []
+            res.changes, res.events, res.transitions = [], [], []
             if not dry_run:
                 with self.conn.transaction():
                     self._log(res, actor, params_in)
@@ -216,6 +302,9 @@ class ActionEngine:
         """
         act = self.client.onto.actions[action]
         q = self.client.objects(act.target).bind(**(params or {}))
+        rule = self.states.rule(act.target, action)
+        if rule:                                                # 20장: 시작 상태도 조회 조건으로
+            q = q.where({"field": rule.property, "op": "in", "value": list(rule.from_)})
         if actor is not None:
             q = q.as_actor(actor)
             perm = act.permission
@@ -228,6 +317,72 @@ class ActionEngine:
                 q = q.where(rule.check)
         return q
 
+    def check(self, action: str, target: Any, *, actor: dict, params: dict | None = None) -> ActionCheck:
+        """지금 이 대상에 action 을 실행하면 어떻게 되는지 — 아무것도 바꾸지 않고, 기록도 남기지 않는다.
+
+        apply() 와 같은 순서로 검사한다. 필수 입력이 빠졌으면 그 입력을 쓰지 않는 조건까지만
+        검사하고 needs_input 을 돌려준다 (AI 에이전트가 무엇을 더 물어야 하는지 알 수 있다).
+        """
+        act = self.client.onto.actions.get(action)
+        if act is None:
+            raise QueryError(f"Action '{action}' 이 없습니다")
+        if hasattr(target, "pk"):
+            target = target.pk
+        rule = self.states.rule(act.target, action)
+        out = ActionCheck(action, act.display_name, "ready", next_state=rule.to if rule else None)
+        given = dict(params or {})
+        try:
+            actor = self._check_actor(dict(actor))
+            self._check_role(act, actor)
+            missing = [n for n, p in act.parameters.items() if p.required and p.default is None and n not in given]
+            params_ = self._check_params(act, given, partial=True)
+            ts = self._target_set(act, target, params_, actor, lock=False)
+            if not _uses_params(act.permission.check, missing):
+                self._check_permission(act, ts, params_, actor)
+            failed = self._failed_rules(action, act, ts, params_, actor, skip=missing)
+            if failed:
+                raise ActionStop("rejected", failed)
+            if missing:
+                out.missing = missing
+                raise ActionStop("needs_input", [f"입력이 필요합니다: {', '.join(missing)} "
+                                                 "(입력을 받으면 그 입력을 쓰는 조건을 마저 검사합니다)"])
+            if act.approval and not _uses_params(act.approval.required_if, missing) and \
+                    self.evaluate(act.approval.required_if, ts, params_, actor):
+                raise ActionStop("approval_required", [act.approval.reason or "승인이 필요합니다",
+                                                       f"승인자 역할: {', '.join(act.approval.approver_roles)}"])
+        except ActionStop as stop:
+            out.status, out.messages = stop.status, stop.messages
+        except (FunctionError, QueryError) as e:
+            out.status, out.messages = "invalid", [str(e)]
+        return out
+
+    def available(self, object_type: str, pk: Any, *, actor: dict) -> Availability:
+        """한 객체에 대해 지금 할 수 있는 일 — 이 타입을 대상으로 하는 모든 Action 을 check() 한다"""
+        if object_type not in self.client.onto.object_types:
+            raise QueryError(f"객체 타입 '{object_type}' 이 없습니다")
+        obj = self.client.get(object_type, pk)
+        if obj is None:
+            raise QueryError(f"{object_type} '{pk}' 가 없습니다")
+        state = None
+        m = self.states.machine(object_type)
+        if m:
+            value = obj.properties.get(m.property)
+            state = {"property": m.property, "value": value, "terminal": value in m.terminal,
+                     "next": self.states.next_actions(object_type, value)}
+        checks = [self.check(name, obj.pk, actor=actor)
+                  for name, act in self.client.onto.actions.items() if act.target == object_type]
+        return Availability(object_type, obj.pk, state, checks)
+
+    def history(self, object_type: str, pk: Any) -> list[dict]:
+        """객체의 상태 전이 이력 (오래된 것부터)"""
+        self.ensure_tables()
+        return self.conn.execute(
+            f"""SELECT t.created_at, t.property, t.from_state, t.to_state, t.action,
+                       t.actor->>'id' AS actor_id, t.actor->>'type' AS actor_type, t.execution_id
+                FROM {ENGINE_SCHEMA}.state_transitions t
+                WHERE t.object_type = %s AND t.target_pk = %s
+                ORDER BY t.created_at, t.transition_id""", (object_type, str(pk))).fetchall()
+
     # ------------------------------------------------------------------ 0~3단계: 검사
     @staticmethod
     def _check_actor(actor: dict) -> dict:
@@ -238,7 +393,7 @@ class ActionEngine:
             raise ActionStop("invalid", [f"실행자 유형 '{actor['type']}' 은 human·agent·system 중 하나여야 합니다"])
         return actor
 
-    def _check_params(self, act: Action, given: dict) -> dict:
+    def _check_params(self, act: Action, given: dict, partial: bool = False) -> dict:
         unknown = set(given) - set(act.parameters)
         if unknown:
             raise ActionStop("invalid", [f"정의에 없는 파라미터: {', '.join(sorted(unknown))}"])
@@ -247,7 +402,7 @@ class ActionEngine:
         for name, p in act.parameters.items():
             value = given.get(name, p.default)
             if value is None:
-                if p.required:
+                if p.required and not partial:
                     raise ActionStop("invalid", [f"필수 파라미터 '{name}' 이 없습니다"])
                 out[name] = None
                 continue
@@ -259,11 +414,14 @@ class ActionEngine:
         return out
 
     def _lock_target(self, act: Action, target: Any, params: dict, actor: dict) -> ObjectSet:
+        return self._target_set(act, target, params, actor, lock=True)
+
+    def _target_set(self, act: Action, target: Any, params: dict, actor: dict, *, lock: bool) -> ObjectSet:
         ot = self.client.onto.object_types[act.target]
         pk_prop = ot.properties[ot.source.primary_key]
         pk = coerce(pk_prop, target, "target")
         row = self.conn.execute(
-            sql.SQL("SELECT 1 FROM {} WHERE {} = %s FOR UPDATE").format(
+            sql.SQL("SELECT 1 FROM {} WHERE {} = %s" + (" FOR UPDATE" if lock else "")).format(
                 sql.Identifier(ot.source.table), sql.Identifier(pk_prop.column or ot.source.primary_key)),
             (pk,)).fetchone()
         if row is None:
@@ -286,10 +444,32 @@ class ActionEngine:
         if perm.check and not self.evaluate(perm.check, ts, params, actor):
             raise ActionStop("denied", ["권한 조건을 만족하지 않습니다 (예: 본인 담당 고객이 아님)"])
 
-    def _check_preconditions(self, act: Action, ts: ObjectSet, params: dict, actor: dict) -> None:
-        failed = [rule.message for rule in act.preconditions if not self.evaluate(rule.check, ts, params, actor)]
+    def _check_preconditions(self, action: str, act: Action, ts: ObjectSet, params: dict, actor: dict) -> None:
+        failed = self._failed_rules(action, act, ts, params, actor)
         if failed:
             raise ActionStop("rejected", failed)
+
+    def _failed_rules(self, action: str, act: Action, ts: ObjectSet, params: dict, actor: dict,
+                      skip: list[str] | None = None) -> list[str]:
+        """상태 전이 + 실행 조건 중 만족하지 못한 것의 메시지를 모두 (하나만이 아니라)"""
+        failed = []
+        rule = self.states.rule(act.target, action)
+        if rule:
+            current = ts.rows(rule.property)[0][rule.property]
+            if current not in rule.from_:
+                failed.append(f"현재 상태가 '{current}' 입니다. '{act.display_name}' 은 "
+                              f"{'·'.join(rule.from_)} 상태에서만 할 수 있습니다.")
+        failed += [r.message for r in act.preconditions
+                   if not _uses_params(r.check, skip or []) and not self.evaluate(r.check, ts, params, actor)]
+        return failed
+
+    def _check_expect(self, ts: ObjectSet, expect: dict) -> None:
+        """낙관적 동시성 검사: 실행자가 읽은 값과 지금 값이 다르면 멈춘다"""
+        current = ts.rows(*expect)[0]
+        changed = [f"대상이 그사이 바뀌었습니다: {k} 예상 '{v}', 현재 '{current[k]}'"
+                   for k, v in expect.items() if str(current[k]) != str(v)]
+        if changed:
+            raise ActionStop("rejected", changed + ["최신 상태를 다시 읽고 판단하세요."])
 
     def evaluate(self, cond: Condition, ts: ObjectSet, params: dict, actor: dict) -> bool:
         """조건식 평가: Function 이 없으면 SQL 한 번, 있으면 논리 연산을 Python 에서 나눠 평가"""
@@ -382,10 +562,11 @@ class ActionEngine:
             return result
 
     # ------------------------------------------------------------------ 5단계: 변경
-    def _apply_edit(self, act: Action, edit: Edit, ts: ObjectSet, params: dict, actor: dict) -> list[dict]:
+    def _apply_edit(self, act: Action, edit: Edit, ts: ObjectSet, params: dict, actor: dict,
+                    res: ActionResult) -> list[dict]:
         if edit.update is not None:
             obj = ts.one()
-            return self._update(act.target, [obj], self._values(act.target, edit.set, ts, params, actor))
+            return self._update(act.target, [obj], self._values(act.target, edit.set, ts, params, actor), res)
         if edit.update_linked is not None:
             linked = ts.pivot(edit.update_linked)
             if edit.where is not None:
@@ -394,8 +575,8 @@ class ActionEngine:
             if not objs:
                 return []
             return self._update(linked.object_type, objs,
-                                self._values(linked.object_type, edit.set, ts, params, actor))
-        return [self._create(edit.create, edit.values, ts, params, actor)]
+                                self._values(linked.object_type, edit.set, ts, params, actor), res)
+        return [self._create(edit.create, edit.values, ts, params, actor, res)]
 
     def _values(self, otype: str, raw: dict, ts: ObjectSet, params: dict, actor: dict) -> dict:
         props = self.client.onto.object_types[otype].properties
@@ -405,10 +586,41 @@ class ActionEngine:
             out[name] = coerce(props[name], value, f"{otype}.{name}")
         return out
 
-    def _update(self, otype: str, objs: list[OntoObject], values: dict) -> list[dict]:
+    def _update(self, otype: str, objs: list[OntoObject], values: dict, res: ActionResult) -> list[dict]:
         ot = self.client.onto.object_types[otype]
         pk_name = ot.source.primary_key
         pk_col = ot.properties[pk_name].column or pk_name
+
+        # 동시 변경 감지: 바꿀 행을 잠그고 다시 읽어, 앞에서 읽은 값(before)과 같은지 확인한다.
+        # 대상 객체는 1단계에서 잠갔지만 링크로 이어진 객체는 여기서 처음 잠근다.
+        cols = sql.SQL(", ").join(sql.SQL("{} AS {}").format(
+            sql.Identifier(ot.properties[k].column or k), sql.Identifier(k)) for k in [pk_name, *values])
+        locked = {r[pk_name]: r for r in self.conn.execute(
+            sql.SQL("SELECT {} FROM {} WHERE {} = ANY(%s) FOR UPDATE").format(
+                cols, sql.Identifier(ot.source.table), sql.Identifier(pk_col)), ([o.pk for o in objs],))}
+        conflicts = []
+        for o in objs:
+            now = locked.get(o.pk)
+            if now is None:
+                conflicts.append(f"동시 변경 감지: {otype}({o.pk}) 가 그사이 삭제되었습니다")
+                continue
+            conflicts += [f"동시 변경 감지: {otype}({o.pk}) 의 {k} 가 그사이 '{o.properties.get(k)}' → "
+                          f"'{now[k]}' 로 바뀌었습니다" for k in values if now[k] != o.properties.get(k)]
+        if conflicts:
+            raise StateConflict(conflicts + ["다른 실행과 겹쳤습니다. 최신 상태로 다시 시도하세요."])
+
+        # 상태 전이 검사: 실행 전 검사는 대상만 보았으므로, 링크 객체까지 모든 변경을 다시 확인한다
+        m = self.states.machine(otype)
+        if m and m.property in values:
+            rule = self.states.rule(otype, res.action)
+            after = values[m.property]
+            for o in objs:
+                before = o.properties.get(m.property)
+                if rule is None or before not in rule.from_ or after != rule.to:
+                    raise StateConflict([f"허용되지 않은 상태 전이: {otype}({o.pk}) {before} → {after} "
+                                         f"({res.action})"])
+                res.transitions.append({"object_type": otype, "pk": o.pk, "property": m.property,
+                                        "from": before, "to": after})
         assignments = sql.SQL(", ").join(
             sql.SQL("{} = %s").format(sql.Identifier(ot.properties[k].column or k)) for k in values)
         self.conn.execute(
@@ -418,9 +630,13 @@ class ActionEngine:
         return [{"op": "update", "object_type": otype, "pk": o.pk,
                  "before": {k: o.properties.get(k) for k in values}, "after": values} for o in objs]
 
-    def _create(self, otype: str, raw: dict, ts: ObjectSet, params: dict, actor: dict) -> dict:
+    def _create(self, otype: str, raw: dict, ts: ObjectSet, params: dict, actor: dict, res: ActionResult) -> dict:
         ot = self.client.onto.object_types[otype]
         values = {k: v for k, v in self._values(otype, raw, ts, params, actor).items() if v is not None}
+        m = self.states.machine(otype)
+        if m and values.get(m.property) not in m.initial:
+            raise StateConflict([f"새 {otype} 의 {m.property} '{values.get(m.property)}' 는 처음 상태가 아닙니다 "
+                                 f"(initial: {', '.join(m.initial)})"])
         pk_name = ot.source.primary_key
         pk_col = ot.properties[pk_name].column or pk_name
         if ot.source.id_strategy == "uuid":
@@ -436,6 +652,9 @@ class ActionEngine:
                 sql.Identifier(ot.source.table), sql.SQL(", ").join(map(sql.Identifier, cols)),
                 sql.SQL(", ").join(sql.Placeholder() * len(values))),
             tuple(values.values()))
+        if m:
+            res.transitions.append({"object_type": otype, "pk": values[pk_name], "property": m.property,
+                                    "from": None, "to": values[m.property]})
         return {"op": "create", "object_type": otype, "pk": values[pk_name], "after": values}
 
     def _next_id(self, table: str, pk_col: str, prefix: str) -> str:
@@ -451,6 +670,15 @@ class ActionEngine:
         return f"{prefix}{n:0{width}d}"
 
     # ------------------------------------------------------------------ 6단계: 이벤트·감사
+    def _record_transitions(self, res: ActionResult, actor: dict) -> None:
+        for t in res.transitions:
+            self.conn.execute(
+                f"""INSERT INTO {ENGINE_SCHEMA}.state_transitions
+                    (execution_id, action, object_type, target_pk, property, from_state, to_state, actor)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                (res.execution_id, res.action, t["object_type"], str(t["pk"]), t["property"],
+                 t["from"], t["to"], _json(actor)))
+
     def _emit(self, act: Action, res: ActionResult, target: Any, params: dict, actor: dict) -> list[str]:
         for event in act.emits:
             self.conn.execute(

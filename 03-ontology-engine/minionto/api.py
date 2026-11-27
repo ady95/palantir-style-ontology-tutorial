@@ -11,6 +11,8 @@
   POST /v1/ontologies/{o}/objects/{type}/aggregate      그룹별 개수·집계
   GET  /v1/ontologies/{o}/objects/{type}/{pk}           객체 하나
   GET  /v1/ontologies/{o}/objects/{type}/{pk}/links/{link}
+  GET  /v1/ontologies/{o}/objects/{type}/{pk}/actions   지금 이 객체에 할 수 있는 일 (20장)
+  GET  /v1/ontologies/{o}/objects/{type}/{pk}/history   상태 전이 이력 (20장)
   POST /v1/ontologies/{o}/functions/{fn}
   GET  /v1/ontologies/{o}/actions/{a}/candidates        내가 실행할 수 있는 대상
   POST /v1/ontologies/{o}/actions/{a}/apply             실행 (dry_run 가능)
@@ -120,6 +122,8 @@ class ApplyRequest(BaseModel):
     target: Any
     params: dict[str, Any] = Field(default_factory=dict)
     dry_run: bool = False
+    expect: dict[str, Any] | None = Field(
+        None, description='읽어 둔 값 (예: {"status": "검토중"}). 그사이 바뀌었으면 409 rejected')
 
 
 class DecideRequest(BaseModel):
@@ -278,6 +282,20 @@ def create_app(served: list[Served] | dict[str, Served], *, api_keys: dict[str, 
         page = linked.offset(offset).limit(min(max(limit, 1), MAX_LIMIT)).all()
         return {"object_type": end.target, "many": True, "total": linked.count(), "data": plain(page)}
 
+    @app.get("/v1/ontologies/{ontology}/objects/{object_type}/{pk}/actions", tags=["objects"])
+    def available(object_type: str, pk: str, client: OntologyClient = Depends(client_of),
+                  actor: dict = Depends(current_actor)):
+        check_type(client, object_type)
+        if client.get(object_type, pk_value(client, object_type, pk)) is None:
+            raise HTTPException(404, f"{object_type}({pk}) 를 찾을 수 없습니다")
+        return client.actions.available(object_type, pk_value(client, object_type, pk), actor=actor).to_dict()
+
+    @app.get("/v1/ontologies/{ontology}/objects/{object_type}/{pk}/history", tags=["objects"])
+    def state_history(object_type: str, pk: str, client: OntologyClient = Depends(client_of),
+                      actor: dict = Depends(current_actor)):
+        check_type(client, object_type)
+        return {"object_type": object_type, "pk": pk, "data": plain(client.actions.history(object_type, pk))}
+
     # ------------------------------------------------------------------ Function
     @app.post("/v1/ontologies/{ontology}/functions/{function}", tags=["functions"])
     def call_function(function: str, body: FunctionRequest, client: OntologyClient = Depends(client_of),
@@ -309,7 +327,7 @@ def create_app(served: list[Served] | dict[str, Served], *, api_keys: dict[str, 
               actor: dict = Depends(current_actor)):
         check_action(client, action)
         return action_response(client.actions.apply(action, body.target, actor=actor, params=body.params,
-                                                    dry_run=body.dry_run))
+                                                    dry_run=body.dry_run, expect=body.expect))
 
     @app.get("/v1/ontologies/{ontology}/approvals", tags=["actions"])
     def approvals(client: OntologyClient = Depends(client_of), actor: dict = Depends(current_actor)):

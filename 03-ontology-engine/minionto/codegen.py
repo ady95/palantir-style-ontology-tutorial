@@ -30,6 +30,7 @@ def _ident(name: str) -> str:
 # RemoteOntology 의 메서드·속성과 겹치는 Function·Action 이름은 뒤에 _ 를 붙인다
 CLIENT_RESERVED = {"get", "post", "call", "apply", "objects", "metadata", "close", "candidates", "approvals",
                    "decide", "linked", "get_object", "check_version", "link_target", "http", "prefix", "name",
+                   "available", "history",
                    "ontology", "version", "models", "link_targets"}
 
 
@@ -117,6 +118,10 @@ def generate(meta: dict, *, class_name: str | None = None) -> str:
                                          for k, v in ot["links"].items())
         if ot["actions"]:
             doc += "\nAction: " + ", ".join(ot["actions"])
+        sm = ot.get("state_machine")
+        if sm:
+            doc += (f"\n\n상태({sm['property']}): 처음 {', '.join(sm['initial'])} · 종료 {', '.join(sm['terminal'])}\n"
+                    + "\n".join(f"  {'·'.join(t['from'])} → {t['to']}  ({a})" for a, t in sm["transitions"].items()))
         w(_doc(doc, "    "))
         w(f"    __object_type__: ClassVar[str] = {tname!r}\n    __pk__: ClassVar[str] = {pk!r}\n\n")
         order = [pk] + [p for p in props if p != pk]
@@ -180,7 +185,8 @@ def generate(meta: dict, *, class_name: str | None = None) -> str:
     for aname, act in meta["actions"].items():
         req, opt = _signature(act["parameters"], meta)
         target_type = _param_type({"type": "object", "object_type": act["target"]}, meta)
-        args = ", ".join(["self", f"target: {target_type}"] + req + ["*"] + opt + ["dry_run: bool = False"])
+        args = ", ".join(["self", f"target: {target_type}"] + req + ["*"] + opt
+                         + ["dry_run: bool = False", "expect: dict[str, Any] | None = None"])
         w(f"    def {_method(aname)}({args}) -> ActionResponse:\n")
         perm = act["permission"]
         doc = [f"{act['display_name']} (대상: {act['target']})"]
@@ -192,11 +198,13 @@ def generate(meta: dict, *, class_name: str | None = None) -> str:
                        + (f" — {act['approval']['reason']}" if act["approval"].get("reason") else ""))
         if act["preconditions"]:
             doc += ["실행 조건 (못 맞추면 rejected 와 함께 돌려주는 메시지):"] + [f"  - {m}" for m in act["preconditions"]]
+        for t in act.get("transitions") or []:
+            doc.append(f"상태 전이: {t['object_type']}.{t['property']} {'·'.join(t['from'])} → {t['to']}")
         if act["emits"]:
             doc.append(f"이벤트: {', '.join(act['emits'])}")
         w(_doc("\n".join(doc), "        "))
         w(f"        return self.apply({aname!r}, _pk(target), params={_args_dict(act['parameters'])}, "
-          "dry_run=dry_run)\n\n")
+          "dry_run=dry_run, expect=expect)\n\n")
     return "".join(out).rstrip() + "\n"
 
 
