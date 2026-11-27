@@ -356,7 +356,8 @@ def _date(v: Any):
 
 # ---------------------------------------------------------------------- 실행 도우미
 def config(task_id: str, recursion_limit: int = 1000) -> dict:
-    """노드 한 번이 한 단계(super-step)다. 대상 하나에 4~5단계이므로 기본 한도(25)로는 모자란다"""
+    """recursion_limit: 한 번 실행에서 허용하는 단계(super-step) 수. 노드 한 번이 한 단계이고 대상 37건에
+    약 90단계였다. 기본값(LangGraph 1.1.4 이상 10,007)보다 작게 잡아, 분기 실수로 생긴 반복을 일찍 멈춘다"""
     return {"configurable": {"thread_id": task_id}, "recursion_limit": recursion_limit}
 
 
