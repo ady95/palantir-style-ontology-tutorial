@@ -7,6 +7,7 @@ mapping:
   name: taxos
   version: 0.1.0
   semantic: ../01-traditional-ontology/ontology/taxos.ttl
+  semantic_extra: [taxos_rules.ttl]   # 30장: 하이브리드용 정의 클래스
   operational: ../03-ontology-engine/ontologies/taxos/ontology.yaml
   prefixes:
     tx:   https://example.org/taxos#
@@ -165,10 +166,19 @@ link_types:
 not_mapped:
   object_types:
     Notification: 알림 발송 결과는 운영 기록(23장) — 의미 모델에 없음
+    CustomerSegment: 추론 결과를 받아 둔 것(30장) — 의미 모델에서는 정의 클래스 소속으로 표현 (inferred)
   link_types:
     tax_return_notifications: 알림 발송 결과는 운영 기록
     customer_notifications:   알림 발송 결과는 운영 기록
+    customer_segments:        추론 결과를 받아 둔 것(30장)
 
-semantic_only:
-  tx:LateFiler:           정의 클래스 — 위험 이벤트로 추론한다 (운영형에는 없음, 30장에서 추론 결과를 쓴다)
-  tx:UnreachableCustomer: 정의 클래스 — 위험 이벤트로 추론한다
+semantic_only: {}
+
+# -----------------------------------------------------------------------------
+# 추론 결과 → 운영형 (30장): 정의 클래스의 소속을 CustomerSegment 로 돌려받는다
+#   데이터를 직접 쓰지 않고 시스템 실행자의 Action(assign_segment·release_segment)으로만
+# -----------------------------------------------------------------------------
+inferred:
+  tx:LateFiler:           { object_type: Customer, segment: 기한후신고이력 }
+  tx:UnreachableCustomer: { object_type: Customer, segment: 연락두절이력 }
+  tx:RepeatRiskCustomer:  { object_type: Customer, segment: 반복위험 }

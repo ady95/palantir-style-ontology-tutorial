@@ -71,6 +71,9 @@ class Mapping:
     not_mapped_links: dict[str, str]
     semantic_only: dict[URIRef, str]
     ns: NamespaceManager
+    name: str = ""
+    inferred: dict[URIRef, dict] = field(default_factory=dict)    # 정의 클래스 → 운영형으로 돌려받는 방법 (30장)
+    sources: list[str] = field(default_factory=list)              # 의미 모델 파일 (본 파일 + 덧붙인 파일)
 
     @classmethod
     def load(cls, path: str | Path) -> Mapping:
@@ -84,7 +87,10 @@ class Mapping:
             if pre in prefixes:
                 return URIRef(prefixes[pre] + local)
             return URIRef(curie)
-        owl = Graph().parse(path.parent / head["semantic"])
+        files = [head["semantic"], *head.get("semantic_extra", [])]
+        owl = Graph()
+        for f in files:
+            owl.parse(path.parent / f)
         for p, ns in prefixes.items():
             owl.bind(p, ns)
         types = {}
@@ -104,7 +110,8 @@ class Mapping:
         return cls(path, load(path.parent / head["operational"]), owl, prefixes[head.get("instance_base", "txd")],
                    head.get("minimal_types", True), types, links, dict(nm.get("object_types") or {}),
                    dict(nm.get("link_types") or {}), {iri(k): v for k, v in (raw.get("semantic_only") or {}).items()},
-                   owl.namespace_manager)
+                   owl.namespace_manager, head.get("name", ""),
+                   {iri(k): v for k, v in (raw.get("inferred") or {}).items()}, files)
 
     def short(self, u: URIRef) -> str:
         return u.n3(self.ns)
@@ -203,8 +210,9 @@ def check(m: Mapping) -> Report:
         add("error", "의미 모델", f"{m.short(c)} 은 OWL 에 선언된 클래스가 아닙니다")
     for p in used_props - dprops - oprops - ANNOTATIONS:
         add("error", "의미 모델", f"{m.short(p)} 은 OWL 에 선언된 속성이 아닙니다")
-    cov["클래스(OWL)"] = [len(classes & used_classes), len(classes & set(m.semantic_only)), len(classes)]
-    for c in sorted(classes - used_classes - set(m.semantic_only)):
+    reasoned = set(m.semantic_only) | set(m.inferred)
+    cov["클래스(OWL)"] = [len(classes & used_classes), len(classes & reasoned), len(classes)]
+    for c in sorted(classes - used_classes - reasoned):
         add("warn", "의미 모델", f"클래스 {m.short(c)} 이 매핑에 없고 이유도 없습니다")
     allp = dprops | oprops
     cov["속성(OWL)"] = [len(allp & used_props), len(allp & set(m.semantic_only)), len(allp)]

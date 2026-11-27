@@ -22,6 +22,7 @@
 | 26 | MCP 서버(stdio·Streamable HTTP): 토큰별 도구 목록·isError·리소스·프롬프트·DB 세션·사람의 확인 CLI | ✅ v0.1 |
 | 27 | LangGraph 업무 그래프: 탐지·분석·메모(LLM)·실행·승인 대기 중단/재개·실행 기록 대조·보고, PostgreSQL 체크포인트 | ✅ v0.1 |
 | 29 | OWL ↔ 운영형 매핑: 매핑 검증·공리 데이터 확인·RDF 내보내기(권한 정책 적용)·OWL 에서 정의 초안 | ✅ v0.1 |
+| 30 | OWL 추론 → 고객 분류(CustomerSegment): 모순이면 중단, 시스템 Action 으로만 반영, 사람의 해제 존중, 일부 그래프로는 해제 안 함 | ✅ v0.1 |
 
 > 세무 정의(taxos)는 장이 진행되며 버전이 오릅니다. 각 장 원고의 출력은 그 장의 태그 기준입니다.
 >
@@ -63,6 +64,7 @@
 │   ├── mcp_server.py         # MCP 서버: JWT 인증, scope 별 도구, DB 세션(SessionStore)        [26장]
 │   ├── workflow.py           # LangGraph 업무 그래프: 신고 지연 위험 고객 처리, 중단·재개      [27장]
 │   ├── semantic.py           # OWL ↔ 운영형 매핑: 검증·공리 확인·RDF 내보내기·정의 초안       [29장]
+│   ├── reasoning.py          # OWL-RL 추론 → 고객 분류 동기화 (시스템 Action)                 [30장]
 │   ├── loader.py, cli.py
 ├── examples/17_object_link_engine.py   # PART 2 SPARQL 질문을 엔진으로 다시 풀기
 ├── examples/17_compare_sparql.py       # SPARQL(RDF 그래프)과 엔진(운영 DB)의 결과 ID 집합 대조
@@ -79,7 +81,7 @@
 ├── examples/27_workflow.py                # 그래프 구조 → 승인 대기 → 재개 → 실행 직후 중단 → 판단 뒤 변경 → 승인 대기 중 변경
 ├── examples/dev_api_keys.yaml             # 개발용 API 키 (토큰 → 실행자)
 ├── ontologies/               # 도메인 정의 (엔진 코드 수정 없이 교체)
-│   ├── taxos/ontology.yaml       # 세무 v0.6.0: Object 9 · Link 12 · Function 4 · Action 11 · 상태 머신 3 · 정책 2 · 구독 1
+│   ├── taxos/ontology.yaml       # 세무 v0.7.0: Object 10 · Link 13 · Function 4 · Action 14 · 상태 머신 4 · 정책 2 · 구독 1
 │   ├── taxos/functions.py        # Function 구현 (계산만, 테이블 이름 없음)
 │   ├── taxos/integrations.py     # 외부 연동: 이벤트 → 알림 메시지, 결과를 Action 으로 기록 (23장)
 │   └── northwind/ontology.yaml   # 주문·재고: Object 7 · Link 7 · Function 2
@@ -733,6 +735,7 @@ uv run python examples/27_workflow.py --llm    # 메모·요약을 OpenAI 호환
 | 에이전트 도구의 완료 안내가 '사용자에게 알리라' 하나뿐 | 여러 대상을 처리하는 요청에서 LLM 이 첫 실행 뒤 멈춤 (28장 B1: 25건 중 1건) | 남은 대상이 있으면 계속하라는 안내, 일괄 업무는 업무 그래프로 |
 | `find_objects` 는 최대 20건, 다음 쪽 없음 | 대상이 많으면 LLM 이 전체를 볼 수 없음 | 커서 기반 쪽 넘김 또는 일괄 판단 도구 |
 | 매핑은 운영 → RDF 한 방향, IRI 는 기본키 하나로 | RDF 에서 고친 값을 운영 DB 로 되돌리지 못함, 복합키 객체는 매핑 불가 | RDF 쪽 결과를 운영에 반영할 때는 Action 으로만 (30장) |
+| 추론은 전체 데이터를 내보내 다시 계산 (17,261 트리플에 약 9초) | 데이터가 크면 느리다, 실시간 반영 불가 | 바뀐 객체 주변만 다시 추론(증분), 위험 이벤트 구독으로 동기화 시점 정하기 |
 | 업무 그래프는 대상을 하나씩 차례로 처리 | 대상이 많으면 느리다 (37건에 약 90단계), 대상이 400건쯤이면 한도 1000 에 걸린다 | 대상마다 하위 그래프를 Send 로 나누고, 연결·세션을 대상별로 |
 | 그래프는 승인 기록을 엔진 테이블에서 직접 읽음 | 에이전트 도구에는 승인 조회가 없다 | 원격 그래프는 API 의 승인 조회 또는 승인 이벤트 구독 |
 | 메모 검사는 규칙 몇 개(길이·자료 이름·전화번호·금액) | 어조나 그 밖의 사실 오류는 못 잡는다 | 승인 단계에서 사람이 미리보기로 확인, 평가 세트 |

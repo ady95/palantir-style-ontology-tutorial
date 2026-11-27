@@ -6,7 +6,7 @@
 
 ontology:
   name: taxos
-  version: 0.6.0
+  version: 0.7.0
   display_name: 세무 사무소 운영 온톨로지
   description: 고객·신고·필수 자료·업무를 객체로 정의하고, 자료 요청·담당자 배정 같은 업무를 Action으로 실행한다.
 
@@ -31,6 +31,7 @@ security:
         Task:               { field: customer.accountant_id, op: eq, value: $actor.id }
         Consultation:       { field: customer.accountant_id, op: eq, value: $actor.id }
         RiskEvent:          { field: customer.accountant_id, op: eq, value: $actor.id }
+        CustomerSegment:    { field: customer.accountant_id, op: eq, value: $actor.id }
   property_policies:
     personal_info:
       description: AI 에이전트는 고객·담당자의 개인 식별 정보(대표자, 전화, 사업자등록번호, 이메일)를 보지 않는다
@@ -222,6 +223,29 @@ object_types:
       occurred_at: { type: date, required: true }
       note:        { type: string }
 
+  CustomerSegment:
+    display_name: 고객 분류 (추론)
+    description: OWL 추론으로 정해진 고객 분류를 받아 둔 것 (30장). 시스템 실행자의 Action 으로만 바뀐다.
+    source: { table: customer_segments, primary_key: segment_id, id_strategy: prefixed_sequence, id_prefix: G }
+    title_property: segment
+    implements: [Trackable]
+    properties:
+      segment_id:  { type: string, required: true }
+      customer_id: { type: string, required: true }
+      segment:     { type: enum, values: [기한후신고이력, 연락두절이력, 반복위험], required: true, display_name: 분류 }
+      status:      { type: enum, values: [유효, 해제], required: true }
+      inferred_by: { type: string, required: true, display_name: 근거 모델 }
+      evidence:    { type: string, display_name: 근거 }
+      assigned_at: { type: datetime, required: true }
+      released_at: { type: datetime }
+      released_by: { type: string }
+    state_machine:
+      property: status
+      initial: [유효]
+      terminal: [해제]
+      transitions:
+        release_segment: { from: 유효, to: 해제 }
+
 # ---------------------------------------------------------------------------
 # Link Type: forward_name 은 from 쪽에서, reverse_name 은 to 쪽에서 부르는 이름
 # ---------------------------------------------------------------------------
@@ -262,6 +286,9 @@ link_types:
   customer_risk_events:
     { from: Customer, to: RiskEvent, cardinality: one_to_many,
       from_key: customer_id, to_key: customer_id, forward_name: risk_events, reverse_name: customer }
+  customer_segments:
+    { from: Customer, to: CustomerSegment, cardinality: one_to_many,
+      from_key: customer_id, to_key: customer_id, forward_name: segments, reverse_name: customer }
 
 # ---------------------------------------------------------------------------
 # Function: 업무 계산·판단 로직 (구현은 functions.py — 18장)
@@ -611,3 +638,90 @@ actions:
           created_at:  $now
           note:        $params.error
     emits: [notification_failed]
+
+  # ---- 30장: OWL 추론 결과를 운영형으로 받는다 — 시스템 실행자(추론 동기화 작업)만 붙인다
+  assign_segment:
+    display_name: 고객 분류 지정
+    description: OWL 추론으로 정해진 분류를 고객에게 붙인다. 근거(위험 이벤트)와 근거 모델을 남긴다.
+    target: Customer
+    parameters:
+      segment:  { type: enum, values: [기한후신고이력, 연락두절이력, 반복위험] }
+      inferred_by: { type: string, description: 추론에 쓴 모델과 버전 }
+      evidence: { type: string, required: false, description: 근거가 된 객체 ID }
+    preconditions:
+      - message: 이미 같은 분류가 붙어 있습니다.
+        check:
+          none:
+            link: segments
+            where:
+              all:
+                - { field: segment, op: eq, value: $params.segment }
+                - { field: status, op: eq, value: 유효 }
+    permission:
+      roles: [시스템]
+      actor_types: [system]
+    edits:
+      - create: CustomerSegment
+        values:
+          customer_id: $target.customer_id
+          segment:     $params.segment
+          status:      유효
+          inferred_by: $params.inferred_by
+          evidence:    $params.evidence
+          assigned_at: $now
+    emits: [segment_assigned]
+
+  release_segment:
+    display_name: 고객 분류 해제
+    description: 분류를 해제한다. 추론 결과에서 빠졌을 때(시스템) 또는 사람이 분류가 맞지 않다고 판단했을 때(세무사). 기록은 지우지 않는다.
+    target: CustomerSegment
+    parameters:
+      reason: { type: string }
+    permission:
+      roles: [시스템, 세무사]
+      actor_types: [system, human]
+    edits:
+      - update: target
+        set: { status: 해제, released_at: $now, released_by: $actor.id }
+    emits: [segment_released]
+
+  create_priority_contact:
+    display_name: 우선 연락 업무 만들기
+    description: 반복 위험(기한후신고·가산세 이력, 추론) 고객 중 자료수집중 신고가 있는 고객에게 담당자 직접 연락 업무를 만든다.
+    target: Customer
+    parameters:
+      note: { type: string, required: false }
+    preconditions:
+      - message: 반복 위험으로 분류된 고객만 대상입니다 (추론 결과, 30장).
+        check:
+          some:
+            link: segments
+            where:
+              all:
+                - { field: segment, op: eq, value: 반복위험 }
+                - { field: status, op: eq, value: 유효 }
+      - message: 자료수집중인 신고가 없습니다.
+        check: { some: { link: tax_returns, where: { field: status, op: eq, value: 자료수집중 } } }
+      - message: 이미 진행 중인 고객연락 업무가 있습니다.
+        check:
+          none:
+            link: tasks
+            where:
+              all:
+                - { field: task_type, op: eq, value: 고객연락 }
+                - { field: status, op: in, value: [대기, 진행중] }
+    permission:
+      roles: [세무사, 실무자]
+      actor_types: [human]
+    edits:
+      - create: Task
+        values:
+          customer_id: $target.customer_id
+          task_type:   고객연락
+          assignee_id: $target.accountant_id
+          status:      대기
+          due_date:    $today
+          created_by:  $actor.type
+          created_at:  $now
+          note:        $params.note
+    emits: [priority_contact_created]

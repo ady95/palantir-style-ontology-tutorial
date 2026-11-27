@@ -47,7 +47,7 @@ def test_mapping_is_complete_and_consistent(m):
     rep = check(m)
     assert rep.errors == []
     assert all(mapped + excluded == total for mapped, excluded, total in rep.coverage.values()), rep.coverage
-    assert rep.coverage["객체 타입"] == (8, 1, 9) and rep.coverage["링크 타입"] == (10, 2, 12)
+    assert rep.coverage["객체 타입"] == (8, 2, 10) and rep.coverage["링크 타입"] == (10, 3, 13)   # v0.7.0 (30장 CustomerSegment)
     assert not [f for f in rep.findings if f.level == "warn"]
 
 
@@ -103,4 +103,4 @@ def test_draft_from_owl(m):
     assert d["link_types"]["has_tax_return"]["cardinality"] == "one_to_many"
     assert any("LateFiler: 정의 클래스" in n for n in d["notes"])
     cmp = compare_draft(d, m)
-    assert cmp["객체 타입"] == (8, 9) and cmp["링크 타입"] == (10, 12)
+    assert cmp["객체 타입"] == (8, 10) and cmp["링크 타입"] == (10, 13)

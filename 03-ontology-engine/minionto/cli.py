@@ -32,6 +32,7 @@
   python -m minionto workflow run ontologies/taxos/ontology.yaml --task W1 --today 2027-01-18 [--llm]  (27장)
   python -m minionto workflow resume|show ontologies/taxos/ontology.yaml --task W1 [--stop]
   python -m minionto mapping check|export|draft ../06-hybrid-ontology/taxos_mapping.yaml [-o 파일] [--db]  (29장)
+  python -m minionto reason infer|plan|sync ../06-hybrid-ontology/taxos_mapping.yaml                        (30장)
 """
 
 from __future__ import annotations
@@ -588,6 +589,34 @@ def cmd_workflow(args) -> int:
         return _wf_finish(graph, cfg)
 
 
+def cmd_reason(args) -> int:
+    """OWL 추론 → 고객 분류(CustomerSegment) 동기화 (30장). plan 은 바꾸지 않고, sync 는 시스템 Action 으로 반영"""
+    from collections import Counter
+
+    from .objects import OntologyClient
+    from .reasoning import infer, plan_segments, sync_segments
+    from .semantic import Mapping
+    _load_env()
+    m = Mapping.load(args.mapping)
+    with OntologyClient(m.onto, args.db_url, today=args.today) as c:
+        inf = infer(c, m)
+        print(f"{inf.source} · 트리플 {inf.triples[0]:,} → {inf.triples[1]:,} · {inf.seconds}초 · 모순 {len(inf.errors)}건")
+        for cls, n in inf.count().items():
+            print(f"  {m.short(cls):26s} {n:4d}  → {m.inferred[cls]['segment']}")
+        if args.op == "infer":
+            return 0
+        if args.op == "plan":
+            plan = plan_segments(c, m, inf)
+            for p in plan:
+                if p["op"] != "assign" or args.verbose:
+                    print(f"  {p['op']:7s} {p['customer']} {p['segment']} {p.get('why', '')}")
+            print("계획: " + (", ".join(f"{k} {v}" for k, v in Counter(p["op"] for p in plan).items()) or "할 일 없음"))
+            return 0
+        res = sync_segments(c, m, inf)
+        print("반영: " + (", ".join(f"{k} {v}" for k, v in Counter(r["status"] for r in res).items()) or "할 일 없음"))
+        return 0 if all(r["status"] in ("completed", "skip", "keep") for r in res) else 1
+
+
 def cmd_mapping(args) -> int:
     """의미 모델(OWL) ↔ 운영형 정의 매핑: 검증 · RDF 내보내기 · OWL 에서 정의 초안 (29장)"""
     from .semantic import Mapping, axiom_checks, check, draft_from_owl, draft_yaml, export_rdf
@@ -917,6 +946,14 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--db", action="store_true", help="check: 공리를 DB 데이터로도 확인")
     sp.add_argument("--db-url")
     sp.set_defaults(func=cmd_mapping)
+
+    sp = sub.add_parser("reason", help="OWL 추론 → 고객 분류 동기화: infer·plan·sync (30장)")
+    sp.add_argument("op", choices=["infer", "plan", "sync"])
+    sp.add_argument("mapping")
+    sp.add_argument("-v", "--verbose", action="store_true")
+    sp.add_argument("--today")
+    sp.add_argument("--db-url")
+    sp.set_defaults(func=cmd_reason)
 
     sp = sub.add_parser("schema", help="에디터 자동완성용 JSON Schema 출력")
     sp.add_argument("-o", "--output")

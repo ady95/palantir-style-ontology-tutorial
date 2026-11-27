@@ -1,0 +1,18 @@
+@prefix tx:   <https://example.org/taxos#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# =====================================================================
+#  30장: 하이브리드용 정의 클래스 (taxos.ttl 에 덧붙인다)
+#  - 위험 이벤트만으로 고객을 분류한다. 결과는 운영형 CustomerSegment 로 돌려받는다.
+# =====================================================================
+
+# 기한후신고 이력과 가산세부과 이력이 모두 있는 고객 — 같은 문제가 되풀이되는 고객
+tx:RepeatRiskCustomer a owl:Class ;
+    rdfs:label "반복 위험 고객"@ko ;
+    owl:equivalentClass [
+        a owl:Class ;
+        owl:intersectionOf ( tx:Customer
+                             [ a owl:Restriction ; owl:onProperty tx:hasRiskEvent ; owl:someValuesFrom tx:LateFiling ]
+                             [ a owl:Restriction ; owl:onProperty tx:hasRiskEvent ; owl:someValuesFrom tx:PenaltyTax ] )
+    ] .
