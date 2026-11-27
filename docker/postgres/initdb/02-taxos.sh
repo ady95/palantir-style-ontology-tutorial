@@ -16,4 +16,8 @@ for t in accountants customers tax_returns document_types document_submissions c
   psql -v ON_ERROR_STOP=1 -q -U "$U" -d taxos \
     -c "\copy $t FROM '$DATA/data/$t.csv' WITH (FORMAT csv, HEADER true)"
 done
+# 장이 진행되며 추가된 테이블 (예: 23장 notifications) — 이름순으로 적용
+for m in "$DATA"/migrations/*.sql; do
+  [ -e "$m" ] && psql -v ON_ERROR_STOP=1 -q -U "$U" -d taxos -f "$m"
+done
 echo "[initdb] taxos loaded"

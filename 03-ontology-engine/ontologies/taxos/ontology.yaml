@@ -6,14 +6,14 @@
 
 ontology:
   name: taxos
-  version: 0.4.0
+  version: 0.5.0
   display_name: 세무 사무소 운영 온톨로지
   description: 고객·신고·필수 자료·업무를 객체로 정의하고, 자료 요청·담당자 배정 같은 업무를 Action으로 실행한다.
 
 datasource:
   url_env: TAXOS_DATABASE_URL
 
-roles: [세무사, 실무자, AI비서]
+roles: [세무사, 실무자, AI비서, 시스템]     # 시스템: 아웃박스 발송 작업자 등 (23장)
 
 # ---------------------------------------------------------------------------
 # Security (21장): 누가 어떤 객체·속성을 볼 수 있는가. 볼 수 없는 객체에는 Action 도 실행할 수 없다.
@@ -26,6 +26,7 @@ security:
       rules:
         Customer:           { field: accountant_id, op: eq, value: $actor.id }
         TaxReturn:          { field: customer.accountant_id, op: eq, value: $actor.id }
+        Notification:       { field: customer.accountant_id, op: eq, value: $actor.id }
         DocumentSubmission: { field: tax_return.customer.accountant_id, op: eq, value: $actor.id }
         Task:               { field: customer.accountant_id, op: eq, value: $actor.id }
         Consultation:       { field: customer.accountant_id, op: eq, value: $actor.id }
@@ -181,6 +182,25 @@ object_types:
         return_to_collection: { from: [대기, 진행중], to: 취소 }
         cancel_document_request: { from: [대기, 진행중], to: 취소 }  # 보상 Action (22장)
 
+  Notification:
+    display_name: 알림 발송 결과
+    description: 아웃박스 이벤트를 외부(문자·메일·메신저)로 보낸 결과. 발송 작업자가 Action 으로 기록한다 (23장).
+    source: { table: notifications, primary_key: notification_id, id_strategy: prefixed_sequence, id_prefix: N }
+    title_property: event_type
+    properties:
+      notification_id: { type: string, required: true }
+      event_id:        { type: integer, required: true, display_name: 아웃박스 이벤트 }
+      event_type:      { type: string, required: true }
+      customer_id:     { type: string, required: true }
+      return_id:       { type: string }
+      channel:         { type: enum, values: [문자, 메일, 메신저], required: true }
+      recipient:       { type: enum, values: [고객, 세무사], required: true }
+      status:          { type: enum, values: [발송완료, 발송실패], required: true }
+      external_id:     { type: string, display_name: 외부 메시지 ID }
+      attempts:        { type: integer, required: true, display_name: 시도 횟수 }
+      sent_at:         { type: datetime, required: true }
+      detail:          { type: string }
+
   RiskEvent:
     display_name: 위험 이벤트
     source: { table: risk_events, primary_key: event_id }
@@ -196,6 +216,12 @@ object_types:
 # Link Type: forward_name 은 from 쪽에서, reverse_name 은 to 쪽에서 부르는 이름
 # ---------------------------------------------------------------------------
 link_types:
+  tax_return_notifications:
+    { from: TaxReturn, to: Notification, cardinality: one_to_many,
+      from_key: return_id, to_key: return_id, forward_name: notifications, reverse_name: tax_return }
+  customer_notifications:
+    { from: Customer, to: Notification, cardinality: one_to_many,
+      from_key: customer_id, to_key: customer_id, forward_name: notifications, reverse_name: customer }
   customer_accountant:
     { from: Customer, to: Accountant, cardinality: many_to_one,
       from_key: accountant_id, to_key: accountant_id, forward_name: accountant, reverse_name: customers }
@@ -506,3 +532,71 @@ actions:
             - { field: status, op: in, value: [대기, 진행중] }
         set: { status: 취소, note: $params.reason }
     emits: [documents_request_cancelled]
+
+  # ---- 23장: 외부 발송 결과를 온톨로지에 기록 — 발송 작업자(시스템 실행자)만 실행한다
+  record_notification:
+    display_name: 알림 발송 결과 기록
+    target: TaxReturn
+    parameters:
+      event_id:    { type: integer }
+      event_type:  { type: string }
+      channel:     { type: enum, values: [문자, 메일, 메신저] }
+      recipient:   { type: enum, values: [고객, 세무사] }
+      external_id: { type: string }
+      attempts:    { type: integer }
+    permission:
+      roles: [시스템]
+      actor_types: [system]
+    edits:
+      - create: Notification
+        values:
+          event_id:    $params.event_id
+          event_type:  $params.event_type
+          customer_id: $target.customer_id
+          return_id:   $target.return_id
+          channel:     $params.channel
+          recipient:   $params.recipient
+          status:      발송완료
+          external_id: $params.external_id
+          attempts:    $params.attempts
+          sent_at:     $now
+
+  report_notification_failure:
+    display_name: 알림 발송 실패 보고
+    description: 재시도해도 보내지 못한 알림을 기록하고, 담당자에게 직접 연락하라는 업무를 만든다.
+    target: TaxReturn
+    parameters:
+      event_id:   { type: integer }
+      event_type: { type: string }
+      channel:    { type: enum, values: [문자, 메일, 메신저] }
+      recipient:  { type: enum, values: [고객, 세무사] }
+      attempts:   { type: integer }
+      error:      { type: string }
+    permission:
+      roles: [시스템]
+      actor_types: [system]
+    edits:
+      - create: Notification
+        values:
+          event_id:    $params.event_id
+          event_type:  $params.event_type
+          customer_id: $target.customer_id
+          return_id:   $target.return_id
+          channel:     $params.channel
+          recipient:   $params.recipient
+          status:      발송실패
+          attempts:    $params.attempts
+          sent_at:     $now
+          detail:      $params.error
+      - create: Task
+        values:
+          customer_id: $target.customer_id
+          return_id:   $target.return_id
+          task_type:   고객연락
+          assignee_id: $target.customer.accountant_id
+          status:      대기
+          due_date:    $today
+          created_by:  $actor.type
+          created_at:  $now
+          note:        $params.error
+    emits: [notification_failed]

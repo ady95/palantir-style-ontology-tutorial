@@ -13,6 +13,10 @@
   python -m minionto query ontologies/taxos/ontology.yaml Customer --as A003,실무자,human
   python -m minionto approvals list|expire ontologies/taxos/ontology.yaml
   python -m minionto decisions ontologies/taxos/ontology.yaml
+  python -m minionto outbox list ontologies/taxos/ontology.yaml [--status pending]
+  python -m minionto outbox run ontologies/taxos/ontology.yaml --integrations ontologies/taxos/integrations.py \
+      --notifier http://127.0.0.1:8900 [--loop]
+  python -m minionto outbox requeue ontologies/taxos/ontology.yaml 6
   python -m minionto registry register ontologies/taxos/ontology.yaml --actor A001,human
   python -m minionto registry activate taxos 0.1.0 --actor A005,human
   python -m minionto serve ontologies/taxos/ontology.yaml --keys examples/dev_api_keys.yaml   (또는 --registry)
@@ -323,6 +327,42 @@ def cmd_decisions(args) -> int:
     return 0
 
 
+def cmd_outbox(args) -> int:
+    from .objects import OntologyClient
+    from .outbox import outbox_rows, requeue
+    with OntologyClient.open(args.file, args.db_url, today=args.today) as client:
+        if args.op == "list":
+            rows = outbox_rows(client, args.status, args.limit)
+            if not rows:
+                print("(이벤트 없음)")
+            for r in rows:
+                print(f"#{r['event_id']:<4d} {r['event_type']:28s} {r['object_type']}({r['target_pk']})  "
+                      f"{r['status']:9s} 시도 {r['attempts']}" + (f"  {r['last_error']}" if r["last_error"] else ""))
+            return 0
+        if args.op == "requeue":
+            ok = requeue(client, args.event_id)
+            print(f"#{args.event_id} 다시 보낼 차례로: {'완료' if ok else 'dead 상태인 이벤트가 아닙니다'}")
+            return 0 if ok else 1
+        # run: 연동 모듈(integrations.py)의 make_dispatcher·Notifier 로 작업자를 만든다
+        import importlib.util
+        import time
+
+        import httpx
+        if not (args.integrations and args.notifier):
+            raise SystemExit("run 에는 --integrations 와 --notifier 가 필요합니다")
+        spec = importlib.util.spec_from_file_location("minionto_integrations", args.integrations)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        dispatcher = mod.make_dispatcher(client, mod.Notifier(httpx.Client(base_url=args.notifier, timeout=10)),
+                                         backoff=args.backoff, max_attempts=args.max_attempts)
+        while True:
+            for o in dispatcher.run_until_idle(timeout=args.timeout):
+                print(o)
+            if not args.loop:
+                return 0
+            time.sleep(args.interval)
+
+
 def cmd_serve(args) -> int:
     import uvicorn
 
@@ -471,6 +511,23 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--today")
     sp.add_argument("--db-url")
     sp.set_defaults(func=cmd_approvals)
+
+    sp = sub.add_parser("outbox", help="아웃박스 이벤트 보기 · 발송 작업자 실행 · dead 다시 보내기 (23장)")
+    sp.add_argument("op", choices=["list", "run", "requeue"])
+    sp.add_argument("file")
+    sp.add_argument("event_id", nargs="?", type=int, help="requeue 할 이벤트 번호")
+    sp.add_argument("--status", choices=["pending", "published", "dead"])
+    sp.add_argument("--limit", type=int, default=50)
+    sp.add_argument("--integrations", help="연동 모듈 (make_dispatcher·Notifier 를 가진 .py)")
+    sp.add_argument("--notifier", help="외부 발송 서비스 주소")
+    sp.add_argument("--backoff", type=float, default=1.0, help="첫 재시도 간격(초), 시도마다 두 배")
+    sp.add_argument("--max-attempts", type=int, default=5)
+    sp.add_argument("--timeout", type=float, default=30.0, help="한 번 실행에서 기다릴 최대 시간(초)")
+    sp.add_argument("--loop", action="store_true", help="계속 실행 (Ctrl+C 로 멈춤)")
+    sp.add_argument("--interval", type=float, default=2.0)
+    sp.add_argument("--today")
+    sp.add_argument("--db-url")
+    sp.set_defaults(func=cmd_outbox)
 
     sp = sub.add_parser("decisions", help="정책 판단 기록 (21장)")
     sp.add_argument("file")

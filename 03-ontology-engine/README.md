@@ -16,6 +16,7 @@
 | 20 | 상태 머신 · 상태 전이 강제 · 동시 변경 감지 · 지금 가능한 Action 조회 | ✅ v0.1 |
 | 21 | 토큰 인증(JWT·scope) · 행·속성 권한 정책 · 정책 판단 기록 · 승인 기한·미리보기·알림 | ✅ v0.1 |
 | 22 | 잠금 대기 시간 · 멱등 키 · 승인 요청 중복 방지 · 오류 분류와 자동 재시도 · 보상 Action | ✅ v0.1 |
+| 23 | 아웃박스 발송 작업자 · 재시도·순서·dead · 외부 멱등 키 · 발송 결과를 객체로 기록 | ✅ v0.1 |
 
 > 세무 정의(taxos)는 장이 진행되며 버전이 오릅니다. 각 장 원고의 출력은 그 장의 태그 기준입니다.
 >
@@ -24,7 +25,8 @@
 > | `part4` | 15~19장 | v0.1.0 |
 > | `ch20` | 20장 | v0.2.0 (상태 머신, Action 4개 추가) |
 > | `ch21` | 21장 | v0.3.0 (보안 정책, 승인 기한) |
-> | `main` | 22장~ | v0.4.0 (보상 Action) |
+> | `ch22` | 22장 | v0.4.0 (보상 Action) |
+> | `main` | 23장~ | v0.5.0 (Notification 객체, 시스템 실행자) |
 
 ## 구조
 
@@ -47,6 +49,7 @@
 │   ├── states.py             # 상태 머신: 전이 규칙 조회, Mermaid 다이어그램                   [20장]
 │   ├── auth.py               # 인증: JWT 발급·검증(JwtAuth), 개발용 키(ApiKeyAuth), scope        [21장]
 │   ├── policy.py             # 권한 정책: 행·속성 정책 집행, 판단 기록                         [21장]
+│   ├── outbox.py             # 아웃박스 발송 작업자: 재시도·순서·SKIP LOCKED·dead               [23장]
 │   ├── loader.py, cli.py
 ├── examples/17_object_link_engine.py   # PART 2 SPARQL 질문을 엔진으로 다시 풀기
 ├── examples/17_compare_sparql.py       # SPARQL(RDF 그래프)과 엔진(운영 DB)의 결과 ID 집합 대조
@@ -55,10 +58,13 @@
 ├── examples/20_state_transitions.py       # 지금 가능한 Action → 신고 업무 상태 전이 → 동시 변경 감지
 ├── examples/21_security_hitl.py           # 토큰 인증 → 역할별 조회 → 정책 위반 차단 → 승인 워크플로
 ├── examples/22_reliability.py             # 잠금 시간 초과·재시도 → 멱등 키 → 중복 방지 → 오류 분류 → 보상
+├── examples/23_outbox_notifications.py    # 직접 호출의 사고 → 아웃박스 발송 → 장애·순서 → 중단 → 영구 실패
+├── examples/mock_notifier.py              # 실습용 모의 발송 서비스 (멱등 키, 일시 장애, 수신 거부)
 ├── examples/dev_api_keys.yaml             # 개발용 API 키 (토큰 → 실행자)
 ├── ontologies/               # 도메인 정의 (엔진 코드 수정 없이 교체)
-│   ├── taxos/ontology.yaml       # 세무 v0.4.0: Object 8 · Link 10 · Function 4 · Action 9 · 상태 머신 3 · 정책 2
+│   ├── taxos/ontology.yaml       # 세무 v0.5.0: Object 9 · Link 12 · Function 4 · Action 11 · 상태 머신 3 · 정책 2
 │   ├── taxos/functions.py        # Function 구현 (계산만, 테이블 이름 없음)
+│   ├── taxos/integrations.py     # 외부 연동: 이벤트 → 알림 메시지, 결과를 Action 으로 기록 (23장)
 │   └── northwind/ontology.yaml   # 주문·재고: Object 7 · Link 7 · Function 2
 └── schema/minionto.schema.json   # 에디터 자동완성용 JSON Schema
 ```
@@ -522,6 +528,30 @@ uv run python -m minionto run ontologies/taxos/ontology.yaml request_missing_doc
 uv run python examples/22_reliability.py
 ```
 
+## 외부 연동: 아웃박스 발송 작업자 (23장)
+
+Action 은 외부를 직접 부르지 않고 outbox 에 이벤트만 남긴다. 발송 작업자가 outbox 를 읽어 보내고,
+결과를 시스템 실행자의 Action(`record_notification`, `report_notification_failure`)으로 온톨로지에 기록한다.
+
+| 보장 | 방법 |
+|---|---|
+| 적어도 한 번 | 보낸 뒤 '보냈음'을 커밋하기 전에 죽으면 다시 보낸다 → 외부 호출에 멱등 키 `outbox-<event_id>` |
+| 대상별 순서 | 같은 객체의 앞선 이벤트가 pending 이면 다음 이벤트는 기다린다 |
+| 여러 작업자 | `FOR UPDATE SKIP LOCKED` |
+| 재시도·포기 | 일시 실패는 지수 백오프, `max_attempts` 초과·영구 실패는 dead → 담당자에게 고객연락 업무 |
+
+```bash
+uv run uvicorn mock_notifier:app --app-dir examples --port 8900            # 모의 발송 서비스
+uv run python -m minionto outbox list ontologies/taxos/ontology.yaml
+uv run python -m minionto outbox run ontologies/taxos/ontology.yaml \
+  --integrations ontologies/taxos/integrations.py --notifier http://127.0.0.1:8900
+uv run python -m minionto outbox requeue ontologies/taxos/ontology.yaml 6   # dead 이벤트 다시 보내기
+uv run python examples/23_outbox_notifications.py
+```
+
+`notifications` 테이블은 기본 스키마가 아니라 `datasets/taxos/migrations/023_notifications.sql` 로 추가한다.
+`scripts/load_taxos.sh` 가 기본 데이터를 적재한 뒤 migrations 를 이름순으로 적용한다.
+
 ## v0.1의 제약 (의도적으로 단순화)
 
 | 제약 | 영향 | 대안 |
@@ -542,6 +572,8 @@ uv run python examples/22_reliability.py
 | 개수 조회(count)는 조회 기록에 남기지 않음 | AI 가 집계로 얻은 정보는 기록되지 않음 | 집계 기록 추가 |
 | 멱등 키 재생은 저장한 응답 그대로 | 첫 요청 뒤 상태가 바뀌어도 같은 응답을 돌려줌 | 응답에 replayed 표시, 최신 상태는 다시 조회 |
 | 보상 Action 은 대상 전체를 되돌림 | 자료 요청 취소는 그 신고의 '요청됨' 자료를 모두 미요청으로 | 원래 실행(execution_id)을 입력으로 받아 그 변경만 되돌리기 |
+| outbox 상태가 소비자 하나 기준 | 발송 작업자가 published 로 바꾸면 다른 소비자가 같은 이벤트를 읽을 기준이 없음 | 24장 구독자별 처리 위치 |
+| 외부 호출 결과는 발송 후 기록만 | 외부가 먼저 성공해야 하는 Write-back(예: 전자신고 제출)은 구현하지 않음 | 외부 먼저 호출 + 멱등 키 + 결과를 Action 으로 기록 + 대사(reconciliation) |
 | API 는 요청마다 DB 연결을 새로 엶 | 동시 요청이 많으면 연결 비용 | 커넥션 풀(psycopg_pool) |
 | Registry 는 활성 버전 하나만 서빙 | 버전별 API 동시 제공(`/v1`, `/v2`) 불가 | 서버 재시작으로 전환, 이후 버전 라우팅 |
 | Registry 활성화는 서버를 다시 띄워야 반영 | 실행 중 정의 교체 없음 | 활성화 이벤트 구독 후 재적재 |

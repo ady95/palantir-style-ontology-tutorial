@@ -138,6 +138,12 @@ CREATE TABLE IF NOT EXISTS {ENGINE_SCHEMA}.idempotency_keys (
 );
 -- 실패 분류 (22장)
 ALTER TABLE {ENGINE_SCHEMA}.action_log ADD COLUMN IF NOT EXISTS error jsonb;
+-- 아웃박스 발송 상태 (23장): pending → published | dead, 재시도 횟수·다음 시도 시각·마지막 오류
+ALTER TABLE {ENGINE_SCHEMA}.outbox ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'pending';
+ALTER TABLE {ENGINE_SCHEMA}.outbox ADD COLUMN IF NOT EXISTS attempts integer NOT NULL DEFAULT 0;
+ALTER TABLE {ENGINE_SCHEMA}.outbox ADD COLUMN IF NOT EXISTS next_attempt_at timestamptz NOT NULL DEFAULT clock_timestamp();
+ALTER TABLE {ENGINE_SCHEMA}.outbox ADD COLUMN IF NOT EXISTS last_error text;
+CREATE INDEX IF NOT EXISTS outbox_pending ON {ENGINE_SCHEMA}.outbox (next_attempt_at) WHERE status = 'pending';
 -- 승인 워크플로 (21장): 기한과 변경 미리보기
 ALTER TABLE {ENGINE_SCHEMA}.approval_requests ADD COLUMN IF NOT EXISTS expires_at timestamptz;
 ALTER TABLE {ENGINE_SCHEMA}.approval_requests ADD COLUMN IF NOT EXISTS preview jsonb NOT NULL DEFAULT '[]';
@@ -327,7 +333,7 @@ class ActionEngine:
             current = ddl.execute(
                 f"""SELECT to_regclass('{ENGINE_SCHEMA}.idempotency_keys') IS NOT NULL AND EXISTS (
                         SELECT 1 FROM information_schema.columns WHERE table_schema = '{ENGINE_SCHEMA}'
-                        AND table_name = 'action_log' AND column_name = 'error')""").fetchone()[0]
+                        AND table_name = 'outbox' AND column_name = 'next_attempt_at')""").fetchone()[0]
             if not current:
                 ddl.execute("SET lock_timeout = '10s'")
                 ddl.execute(DDL)
