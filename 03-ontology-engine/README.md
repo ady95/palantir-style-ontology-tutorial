@@ -19,6 +19,7 @@
 | 23 | 아웃박스 발송 작업자 · 재시도·순서·dead · 외부 멱등 키 · 발송 결과를 객체로 기록 | ✅ v0.1 |
 | 24 | 감사 로그(객체 이력·실행 추적·해시 체인·완전성 점검·지표) · 이벤트 구독 · 피드백 | ✅ v0.1 |
 | 25 | AI 에이전트 인터페이스: 실행자별 컨텍스트·도구 6개·다음 행동 안내·읽은 값 expect·업무 단위 멱등 키·확인 모드 | ✅ v0.1 |
+| 26 | MCP 서버(stdio·Streamable HTTP): 토큰별 도구 목록·isError·리소스·프롬프트·DB 세션·사람의 확인 CLI | ✅ v0.1 |
 
 > 세무 정의(taxos)는 장이 진행되며 버전이 오릅니다. 각 장 원고의 출력은 그 장의 태그 기준입니다.
 >
@@ -56,7 +57,8 @@
 │   ├── audit.py              # 감사 로그: 객체 이력·실행 추적·완전성 점검·운영 지표             [24장]
 │   ├── subscriptions.py      # 이벤트 구독: check() 후 시스템 실행자로 Action, 재처리          [24장]
 │   ├── agent.py              # AI 에이전트 인터페이스: 컨텍스트·도구 정의·도구 실행(AgentSession) [25장]
-│   ├── llm.py                # OpenAI 호환 API 도구 호출 루프 (run_agent)                     [25장]
+│   ├── llm.py                # OpenAI 호환 API 도구 호출 루프 (run_agent · run_mcp_agent)     [25·26장]
+│   ├── mcp_server.py         # MCP 서버: JWT 인증, scope 별 도구, DB 세션(SessionStore)        [26장]
 │   ├── loader.py, cli.py
 ├── examples/17_object_link_engine.py   # PART 2 SPARQL 질문을 엔진으로 다시 풀기
 ├── examples/17_compare_sparql.py       # SPARQL(RDF 그래프)과 엔진(운영 DB)의 결과 ID 집합 대조
@@ -69,6 +71,7 @@
 ├── examples/mock_notifier.py              # 실습용 모의 발송 서비스 (멱등 키, 일시 장애, 수신 거부)
 ├── examples/24_audit_feedback.py          # 요청 이후 추적 → 이력·추적 → 완전성 점검·재처리 → 피드백 → 지표
 ├── examples/25_agent_interface.py         # 컨텍스트 크기 → 도구 목록 → 도구 직접 호출 → 확인 모드 → (--llm) LLM 에이전트
+├── examples/26_mcp_server.py              # 토큰별 도구 → 결과·리소스·프롬프트 → 세션 이어 가기·확인 → HTTP → (--llm) MCP 호스트
 ├── examples/dev_api_keys.yaml             # 개발용 API 키 (토큰 → 실행자)
 ├── ontologies/               # 도메인 정의 (엔진 코드 수정 없이 교체)
 │   ├── taxos/ontology.yaml       # 세무 v0.6.0: Object 9 · Link 12 · Function 4 · Action 11 · 상태 머신 3 · 정책 2 · 구독 1
@@ -627,6 +630,44 @@ uv run python examples/25_agent_interface.py          # LLM 없이 1~4단계
 uv run python examples/25_agent_interface.py --llm    # LLM 에이전트 (반복: --repeat 3)
 ```
 
+## MCP 서버 (26장)
+
+```bash
+# stdio — MCP 클라이언트가 서버를 하위 프로세스로 띄운다. 토큰은 환경 변수로
+TOKEN=$(uv run python -m minionto token issue --sub agent-01 --role AI비서 --type agent         --scope objects:read,functions:call,actions:apply --ttl 1h)
+MINIONTO_TOKEN=$TOKEN uv run python -m minionto mcp ontologies/taxos/ontology.yaml
+
+# Streamable HTTP — 요청마다 Authorization: Bearer <토큰>. --confirm 이면 실행은 사람이 확인
+uv run python -m minionto mcp ontologies/taxos/ontology.yaml --http --port 8765 --confirm
+uv run python -m minionto agent pending ontologies/taxos/ontology.yaml
+uv run python -m minionto agent confirm ontologies/taxos/ontology.yaml <세션> <확인토큰> --actor A001,세무사,human
+```
+
+MCP 클라이언트 설정 예 (stdio, 경로는 자기 환경에 맞게):
+
+```json
+{"mcpServers": {"minionto": {"command": "uv",
+  "args": ["run", "--directory", "<저장소>/03-ontology-engine", "python", "-m", "minionto", "mcp",
+           "ontologies/taxos/ontology.yaml"],
+  "env": {"MINIONTO_TOKEN": "<에이전트 토큰>"}}}}
+```
+
+| 토큰 범위 | 보이는 도구 |
+|---|---|
+| objects:read | find_objects · get_object · list_actions · check_action |
+| functions:call | call_function |
+| actions:apply | run_action |
+
+- 세션 키 = 토큰 ID(jti). 읽은 상태·멱등 키·확인 대기는 `minionto.agent_sessions` 에 있어 연결이 바뀌어도 이어진다.
+- 결과는 text(JSON)와 structuredContent 로 함께, ok·ready·preview·completed·replayed·approval_required·
+  confirmation_required·needs_input 외에는 `isError: true`.
+- 리소스 `minionto://context`, 프롬프트 `ontology_agent`. stdio 는 서버 지침(instructions)에 컨텍스트를 넣는다.
+
+```bash
+uv run python examples/26_mcp_server.py          # LLM 없이 1~4단계
+uv run python examples/26_mcp_server.py --llm    # MCP 호스트 (반복: --repeat 3)
+```
+
 ## v0.1의 제약 (의도적으로 단순화)
 
 | 제약 | 영향 | 대안 |
@@ -652,6 +693,9 @@ uv run python examples/25_agent_interface.py --llm    # LLM 에이전트 (반복
 | 해시 체인은 같은 DB 안 | DB 관리자가 체인 전체를 다시 계산하면 못 찾음 | 주기적으로 마지막 해시를 외부(별도 저장소)에 남기기 |
 | 에이전트 세션의 읽은 상태·확인 토큰은 메모리에만 | 프로세스가 끝나면 사라짐, 여러 프로세스가 공유 못 함 | 세션 저장소(DB)에 두기 |
 | 에이전트 도구에 집계(그룹별 건수)가 없음 | 그룹별 질문은 여러 번 조회해야 함 | count_by 도구 추가 |
+| MCP HTTP 인증은 21장의 공유키 JWT | MCP 명세가 HTTP 에 권하는 OAuth 2.1 인가 흐름(토큰 발급·메타데이터)은 없음 | 사내 인가 서버 + SDK 의 TokenVerifier |
+| 확인한 사람은 세션 기록에만 | action_log 의 실행자는 에이전트, 확인자는 agent_sessions.state 에 | 확인을 별도 Action·감사 기록으로 |
+| 같은 토큰의 동시 호출은 세션 저장이 경합 | 마지막 저장이 이긴다 (멱등 키가 중복 실행은 막음) | 세션 행 잠금 |
 | 확인 모드는 미리보기 시점과 실행 시점 사이 변경을 expect(상태)로만 확인 | 상태 밖 속성이 바뀌어도 그대로 실행 | 미리보기와 실제 변경 비교(21장 승인의 _check_preview 방식) |
 | 외부 호출 결과는 발송 후 기록만 | 외부가 먼저 성공해야 하는 Write-back(예: 전자신고 제출)은 구현하지 않음 | 외부 먼저 호출 + 멱등 키 + 결과를 Action 으로 기록 + 대사(reconciliation) |
 | API 는 요청마다 DB 연결을 새로 엶 | 동시 요청이 많으면 연결 비용 | 커넥션 풀(psycopg_pool) |

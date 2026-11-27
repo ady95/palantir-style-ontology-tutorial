@@ -97,4 +97,46 @@ def run_agent(chat: ChatClient, session: AgentSession, request: str, *, style: s
     return {"answer": None, "trace": trace, "steps": max_steps, "usage": usage, "stopped": "max_steps"}
 
 
-__all__ = ["ChatClient", "LLMError", "SYSTEM_PROMPT", "run_agent"]
+async def run_mcp_agent(chat: ChatClient, mcp, request: str, *, system: str | None = None,
+                        max_steps: int = 10, on_step=None) -> dict:
+    """MCP 클라이언트(mcp.Client)를 도구로 쓰는 루프 (26장) — 이 프로그램이 MCP 호스트가 된다.
+
+    도구 목록과 지침은 서버에서 받는다: list_tools() → OpenAI tool 정의, 프롬프트 ontology_agent → 시스템 메시지.
+    """
+    import anyio
+    listed = await mcp.list_tools()
+    tools = [{"type": "function", "function": {"name": t.name, "description": t.description or "",
+                                               "parameters": t.input_schema}} for t in listed.tools]
+    if system is None:
+        prompt = await mcp.get_prompt("ontology_agent")
+        system = prompt.messages[0].content.text
+    messages = [{"role": "system", "content": system}, {"role": "user", "content": request}]
+    usage = {"prompt_tokens": 0, "completion_tokens": 0}
+    trace: list[dict] = []
+    for step in range(1, max_steps + 1):
+        resp = await anyio.to_thread.run_sync(lambda: chat.chat(messages, tools))
+        for k in usage:
+            usage[k] += resp.get("usage", {}).get(k, 0)
+        msg = resp["choices"][0]["message"]
+        messages.append({k: v for k, v in msg.items() if k in ("role", "content", "tool_calls")})
+        calls = msg.get("tool_calls") or []
+        if not calls:
+            return {"answer": msg.get("content"), "trace": trace, "steps": step, "usage": usage, "stopped": None}
+        for tc in calls:
+            name, raw = tc["function"]["name"], tc["function"].get("arguments") or "{}"
+            try:
+                args = json.loads(raw)
+            except json.JSONDecodeError:
+                args = {}
+            res = await mcp.call_tool(name, args)
+            text = "".join(getattr(c, "text", "") for c in res.content)
+            out = res.structured_content or {"status": "error", "messages": [text]}
+            item = {"step": step, "tool": name, "args": raw, "result": out, "is_error": res.is_error}
+            trace.append(item)
+            if on_step:
+                on_step(item)
+            messages.append({"role": "tool", "tool_call_id": tc["id"], "content": text})
+    return {"answer": None, "trace": trace, "steps": max_steps, "usage": usage, "stopped": "max_steps"}
+
+
+__all__ = ["ChatClient", "LLMError", "SYSTEM_PROMPT", "run_agent", "run_mcp_agent"]

@@ -24,6 +24,10 @@
   python -m minionto serve ontologies/taxos/ontology.yaml --keys examples/dev_api_keys.yaml   (또는 --registry)
   python -m minionto sdk ontologies/taxos/ontology.yaml -o build/taxos_sdk.py
   python -m minionto schema [-o schema/minionto.schema.json]
+  MINIONTO_TOKEN=<토큰> python -m minionto mcp ontologies/taxos/ontology.yaml            (stdio MCP 서버, 26장)
+  python -m minionto mcp ontologies/taxos/ontology.yaml --http --port 8765              (Streamable HTTP)
+  python -m minionto agent pending ontologies/taxos/ontology.yaml
+  python -m minionto agent confirm ontologies/taxos/ontology.yaml <세션> <확인토큰> --actor A001,세무사,human
 """
 
 from __future__ import annotations
@@ -433,6 +437,48 @@ def cmd_serve(args) -> int:
     return 0
 
 
+def cmd_mcp(args) -> int:
+    _load_env()
+    if args.http:
+        import uvicorn
+
+        from .mcp_server import MiniOntoMCP
+        app = MiniOntoMCP(args.file, today=args.today, confirm=args.confirm).http_app(host=args.host)
+        print(f"MCP 서버 (Streamable HTTP): http://{args.host}:{args.port}/mcp", file=sys.stderr)
+        uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+    else:
+        from .mcp_server import stdio_main
+        stdio_main(args.file, today=args.today, confirm=args.confirm)     # stdout 은 MCP 메시지 전용
+    return 0
+
+
+def cmd_agent(args) -> int:
+    """사람이 에이전트의 확인 대기 실행을 보고 확인·거절한다 (26장) — 에이전트의 도구가 아니다"""
+    from .agent import SessionStore
+    from .objects import OntologyClient
+    _load_env()
+    with OntologyClient.open(args.file, today=args.today) as c:
+        store = SessionStore(c)
+        if args.cmd == "pending":
+            rows = store.pending()
+            for r in rows:
+                print(f"{r['session']}  {r['token']}  {r['actor']}  {r['action']}({r['target']}) {r['params'] or ''}")
+            print(f"확인 대기 {len(rows)}건")
+            return 0
+        actor = _actor(args.actor)
+        if actor.get("type") != "human":
+            raise SystemExit("확인은 사람(human)만 할 수 있습니다")
+        row = c.conn.execute("SELECT actor FROM minionto.agent_sessions WHERE session_key = %s",
+                             (args.session,)).fetchone()
+        if row is None:
+            raise SystemExit(f"세션 '{args.session}' 이 없습니다")
+        s = store.open(args.session, {**row["actor"]}, confirm=True)
+        out = s.confirm(args.token, approve=not args.reject, by=actor)
+        store.save(args.session, s)
+        print(json.dumps(out, ensure_ascii=False, indent=1))
+        return 0 if out["status"] in ("completed", "rejected") else 1
+
+
 def cmd_sdk(args) -> int:
     from .codegen import generate, metadata_from_file, metadata_from_url
     if args.url:
@@ -682,6 +728,25 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--class-name")
     sp.add_argument("-o", "--output")
     sp.set_defaults(func=cmd_sdk)
+
+    sp = sub.add_parser("mcp", help="MCP 서버 실행 — stdio(MINIONTO_TOKEN) 또는 --http (26장)")
+    sp.add_argument("file")
+    sp.add_argument("--http", action="store_true", help="Streamable HTTP (요청마다 Bearer 토큰)")
+    sp.add_argument("--host", default="127.0.0.1")
+    sp.add_argument("--port", type=int, default=8765)
+    sp.add_argument("--confirm", action="store_true", help="run_action 은 미리보기만, 실행은 사람이 agent confirm")
+    sp.add_argument("--today")
+    sp.set_defaults(func=cmd_mcp)
+
+    sp = sub.add_parser("agent", help="에이전트 확인 대기 보기 · 확인/거절 (26장)")
+    sp.add_argument("cmd", choices=["pending", "confirm"])
+    sp.add_argument("file")
+    sp.add_argument("session", nargs="?")
+    sp.add_argument("token", nargs="?")
+    sp.add_argument("--actor", help="확인하는 사람 id,역할,human")
+    sp.add_argument("--reject", action="store_true")
+    sp.add_argument("--today")
+    sp.set_defaults(func=cmd_agent)
 
     sp = sub.add_parser("schema", help="에디터 자동완성용 JSON Schema 출력")
     sp.add_argument("-o", "--output")

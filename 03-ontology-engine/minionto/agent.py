@@ -108,6 +108,24 @@ class AgentSession:
         self._keys: dict[tuple[str, str], dict] = {}          # (Action, 대상) → {key, expect, n, status}
         self._pending: dict[str, dict] = {}                   # 확인 대기 token → 요청
         self.calls: list[dict] = []                           # 도구 호출 기록 (관찰용)
+        self.confirmations: list[dict] = []                   # 사람의 확인 기록 (26장)
+
+    # ================================================================== 상태 저장 (26장)
+    def export_state(self) -> dict:
+        """세션 상태를 JSON 으로 — 프로세스가 바뀌어도(MCP HTTP 서버) 업무를 이어 가기 위해"""
+        return {"task_id": self.task_id,
+                "seen": [[t, pk, st] for (t, pk), st in self.seen.items()],
+                "keys": [[a, tgt, slot] for (a, tgt), slot in self._keys.items()],
+                "pending": self._pending, "calls": self.calls, "confirmations": self.confirmations}
+
+    def load_state(self, state: dict) -> AgentSession:
+        self.task_id = state.get("task_id", self.task_id)
+        self.seen = {(t, pk): st for t, pk, st in state.get("seen", [])}
+        self._keys = {(a, tgt): slot for a, tgt, slot in state.get("keys", [])}
+        self._pending = dict(state.get("pending", {}))
+        self.calls = list(state.get("calls", []))
+        self.confirmations = list(state.get("confirmations", []))
+        return self
 
     # ================================================================== 컨텍스트
     @property
@@ -405,14 +423,17 @@ class AgentSession:
                     self.seen[key] = {t["property"]: t["to"]}
         return self._result(res, key=slot["key"])
 
-    def confirm(self, token: str, approve: bool = True) -> dict:
-        """사람이 미리보기를 보고 확인한다 — 에이전트의 도구가 아니다"""
+    def confirm(self, token: str, approve: bool = True, by: dict | None = None) -> dict:
+        """사람이 미리보기를 보고 확인한다 — 에이전트의 도구가 아니다. by: 확인한 사람 (기록용)"""
         req = self._pending.pop(token, None)
         if req is None:
             return self._out("invalid", [f"확인 대기 중인 토큰 '{token}' 이 없습니다"])
-        if not approve:
-            return self._out("rejected", ["사용자가 실행을 거절했습니다"])
-        return self._execute(req["action"], req["target"], req["params"])
+        out = (self._execute(req["action"], req["target"], req["params"]) if approve
+               else self._out("rejected", ["사용자가 실행을 거절했습니다"]))
+        self.confirmations.append({"token": token, **req, "approve": approve, "by": by,
+                                   "at": str(self.client.now()), "status": out["status"],
+                                   "execution_id": out.get("execution_id")})
+        return out
 
     @staticmethod
     def _change(c: dict) -> dict:
@@ -440,4 +461,52 @@ class AgentSession:
                          execution_id=None if res.dry_run else res.execution_id, idempotency_key=key)
 
 
-__all__ = ["AgentSession"]
+class SessionStore:
+    """에이전트 세션 상태를 DB 에 둔다 (26장) — 세션 키 하나 = 업무 하나
+
+    MCP 서버는 세션 키로 토큰 ID(jti)를 쓴다. 토큰 하나를 업무 하나에 발급하면, 같은 토큰으로 들어온
+    요청은 연결이 바뀌어도 같은 읽은 상태·멱등 키·확인 대기를 이어 쓴다.
+    """
+    DDL = f"""CREATE SCHEMA IF NOT EXISTS minionto;
+CREATE TABLE IF NOT EXISTS minionto.agent_sessions (
+    session_key text PRIMARY KEY,
+    actor       jsonb NOT NULL,
+    state       jsonb NOT NULL,
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now()
+)"""
+
+    def __init__(self, client: OntologyClient):
+        self.client = client
+        for stmt in self.DDL.split(";"):
+            client.conn.execute(stmt)
+
+    def open(self, key: str, actor: dict, **kw: Any) -> AgentSession:
+        """키의 세션을 불러온다 (없으면 새로). 실행자가 다르면 거부 — 남의 세션을 이어 쓰지 못하게"""
+        row = self.client.conn.execute("SELECT actor, state FROM minionto.agent_sessions WHERE session_key = %s",
+                                       (key,)).fetchone()
+        s = AgentSession(self.client, actor, task_id=key, **kw)
+        if row is None:
+            return s
+        if row["actor"].get("id") != actor["id"]:
+            raise PolicyError(f"세션 '{key}' 은 다른 실행자의 세션입니다")
+        return s.load_state(row["state"])
+
+    def save(self, key: str, s: AgentSession) -> None:
+        actor = {k: v for k, v in s.actor.items() if k in ("id", "role", "type")}
+        self.client.conn.execute(
+            """INSERT INTO minionto.agent_sessions (session_key, actor, state) VALUES (%s, %s, %s)
+               ON CONFLICT (session_key) DO UPDATE SET state = EXCLUDED.state, updated_at = now()""",
+            (key, json.dumps(actor, ensure_ascii=False), json.dumps(s.export_state(), ensure_ascii=False,
+                                                                     default=str)))
+
+    def pending(self) -> list[dict]:
+        """사람의 확인을 기다리는 실행 (모든 세션)"""
+        rows = self.client.conn.execute(
+            "SELECT session_key, actor, state FROM minionto.agent_sessions "
+            "WHERE state->'pending' <> '{}'::jsonb ORDER BY updated_at").fetchall()
+        return [{"session": r["session_key"], "actor": r["actor"]["id"], "token": t, **req}
+                for r in rows for t, req in r["state"]["pending"].items()]
+
+
+__all__ = ["AgentSession", "SessionStore"]
