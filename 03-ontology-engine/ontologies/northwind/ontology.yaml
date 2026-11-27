@@ -3,17 +3,26 @@
 # Northwind 주문·재고·물류 온톨로지 (실습용)
 # - 데이터: datasets/northwind (공개 샘플 DB), DB: northwind
 # - 같은 엔진을 세무(taxos)와 다른 도메인에 재사용할 수 있는지 확인하기 위한 정의
-# - 발주·승인 Action은 실습용 테이블을 추가한 뒤 32장에서 정의한다.
+# - 32장: 발주(PurchaseOrder)·입고 Action 과 금액별 승인을 추가했다 (실습용 테이블 purchase_orders).
 
 ontology:
   name: northwind
-  version: 0.1.0
+  version: 0.2.0
   display_name: Northwind 주문·재고 온톨로지
 
 datasource:
   url_env: NORTHWIND_DATABASE_URL
 
-roles: [영업담당, 구매담당, 관리자]
+roles: [영업담당, 구매담당, 관리자, AI비서]
+
+security:
+  property_policies:
+    contact_info:
+      description: AI 에이전트는 거래처 담당자의 이름·연락처를 보지 않는다 (32장)
+      actor_types: [agent]
+      hidden:
+        Customer: [contact_name, phone, fax]
+        Supplier: [contact_name, phone]
 
 interfaces:
   Contactable:
@@ -119,6 +128,32 @@ object_types:
       company_name: { type: string, required: true }
       phone:        { type: string }
 
+  PurchaseOrder:
+    display_name: 발주
+    description: 재고가 부족한 상품을 공급업체에 주문한 것 (32장, 실습용 테이블). Action 으로만 만들고 바꾼다.
+    source: { table: purchase_orders, primary_key: po_id, id_strategy: prefixed_sequence, id_prefix: P }
+    title_property: po_id
+    properties:
+      po_id:             { type: string, required: true }
+      product_id:        { type: integer, required: true }
+      supplier_id:       { type: integer }
+      quantity:          { type: integer, required: true, display_name: 발주 수량 }
+      unit_cost:         { type: decimal, required: true, display_name: 단가 }
+      amount:            { type: decimal, required: true, display_name: 금액 }
+      status:            { type: enum, values: [발주완료, 입고완료, 취소], required: true }
+      requested_by:      { type: string, required: true }
+      ordered_at:        { type: datetime, required: true }
+      received_at:       { type: datetime }
+      received_quantity: { type: integer, display_name: 입고 수량 }
+      note:              { type: string }
+    state_machine:
+      property: status
+      initial: [발주완료]
+      terminal: [입고완료, 취소]
+      transitions:
+        receive_purchase: { from: 발주완료, to: 입고완료 }
+        cancel_purchase:  { from: 발주완료, to: 취소 }
+
 link_types:
   order_customer:
     { from: Order, to: Customer, cardinality: many_to_one,
@@ -145,6 +180,12 @@ link_types:
   employee_manager:
     { from: Employee, to: Employee, cardinality: many_to_one,
       from_key: reports_to, to_key: employee_id, forward_name: manager, reverse_name: direct_reports }
+  product_purchase_orders:
+    { from: Product, to: PurchaseOrder, cardinality: one_to_many,
+      from_key: product_id, to_key: product_id, forward_name: purchase_orders, reverse_name: product }
+  purchase_order_supplier:
+    { from: PurchaseOrder, to: Supplier, cardinality: many_to_one,
+      from_key: supplier_id, to_key: supplier_id, forward_name: supplier, reverse_name: purchase_orders }
 
 functions:
   order_total:
@@ -160,3 +201,158 @@ functions:
       product: { type: object, object_type: Product }
     returns: { type: boolean }
     implementation: functions:is_low_stock
+
+  # ---- 32장: 발주 — 수량·금액 계산은 Function, 승인은 금액별
+  reorder_quantity:
+    description: 발주 제안 수량 — 재고와 입고 예정을 합쳐 재주문 기준의 두 배(최소 10)까지 채운다
+    inputs:
+      product: { type: object, object_type: Product }
+    returns: { type: integer }
+    implementation: functions:reorder_quantity
+
+  purchase_amount:
+    description: 발주 금액 = 단가 × 수량 (실습용으로 판매 단가를 매입 단가로 본다)
+    inputs:
+      product:  { type: object, object_type: Product }
+      quantity: { type: integer }
+    returns: { type: decimal }
+    implementation: functions:purchase_amount
+
+  purchase_amount_at_least:
+    description: 발주 금액이 limit 이상인가 (금액별 승인 조건)
+    inputs:
+      product:  { type: object, object_type: Product }
+      quantity: { type: integer }
+      limit:    { type: decimal }
+    returns: { type: boolean }
+    implementation: functions:purchase_amount_at_least
+
+  stock_after:
+    description: 재고를 quantity × sign 만큼 바꾼 값 (입고 +1, 출고 -1)
+    inputs:
+      product:  { type: object, object_type: Product }
+      quantity: { type: integer }
+      sign:     { type: integer, required: false, default: 1 }
+    returns: { type: integer }
+    implementation: functions:stock_after
+
+  has_stock:
+    description: 지금 재고가 quantity 이상인가
+    inputs:
+      product:  { type: object, object_type: Product }
+      quantity: { type: integer }
+    returns: { type: boolean }
+    implementation: functions:has_stock
+
+  on_order_after:
+    description: 입고 예정 수량을 quantity × sign 만큼 바꾼 값 (0 아래로 내려가지 않음)
+    inputs:
+      product:  { type: object, object_type: Product }
+      quantity: { type: integer }
+      sign:     { type: integer, required: false, default: 1 }
+    returns: { type: integer }
+    implementation: functions:on_order_after
+
+# ---------------------------------------------------------------------------
+# Action (32장): 재고 부족 감지 → 발주 → (금액별 승인) → 입고
+# ---------------------------------------------------------------------------
+actions:
+  record_sale:
+    display_name: 출고 기록
+    description: 판매로 나간 수량만큼 재고를 줄인다 (주문 단위 출고는 주문-상품 링크의 수량이 필요해 v0.1 에서는 상품 단위로).
+    target: Product
+    parameters:
+      quantity: { type: integer }
+      order_id: { type: integer, required: false, description: 참고용 주문 번호 }
+    preconditions:
+      - message: 재고가 모자랍니다.
+        check: { function: has_stock, args: { product: $target.product_id, quantity: $params.quantity } }
+    permission:
+      roles: [영업담당, 관리자]
+      actor_types: [human]
+    edits:
+      - update: target
+        set:
+          units_in_stock: { function: stock_after, args: { product: $target.product_id, quantity: $params.quantity, sign: -1 } }
+    emits: [stock_shipped]
+
+  request_purchase:
+    display_name: 발주 요청
+    description: 재고가 부족한 상품을 공급업체에 발주한다. 상품의 입고 예정 수량을 늘린다.
+    target: Product
+    parameters:
+      quantity: { type: integer, description: 발주 수량 (reorder_quantity 가 제안) }
+      note:     { type: string, required: false }
+    preconditions:
+      - message: 판매가 중단된 상품은 발주하지 않습니다.
+        check: { field: discontinued, op: eq, value: 0 }
+      - message: 공급업체가 없는 상품입니다.
+        check: { field: supplier_id, op: not_null }
+      - message: 재고가 부족한 상품만 발주합니다 (재고 + 입고 예정 ≤ 재주문 기준).
+        check: { function: is_low_stock, args: { product: $target.product_id } }
+      - message: 이미 진행 중인 발주가 있습니다. (중복 발주 방지)
+        check: { none: { link: purchase_orders, where: { field: status, op: eq, value: 발주완료 } } }
+    permission:
+      roles: [구매담당, 관리자, AI비서]
+      actor_types: [human, agent]
+    approval:                           # 금액별 승인: 사람은 1,000 이상, AI 는 300 이상
+      required_if:
+        any:
+          - { function: purchase_amount_at_least, args: { product: $target.product_id, quantity: $params.quantity, limit: 1000 } }
+          - all:
+              - { field: $actor.type, op: eq, value: agent }
+              - { function: purchase_amount_at_least, args: { product: $target.product_id, quantity: $params.quantity, limit: 300 } }
+      approver_roles: [관리자]
+      reason: 발주 금액이 기준 이상입니다 (사람 1,000 · AI 300 이상은 관리자 승인).
+      expires_in: 48h
+    edits:
+      - create: PurchaseOrder
+        values:
+          product_id:   $target.product_id
+          supplier_id:  $target.supplier_id
+          quantity:     $params.quantity
+          unit_cost:    $target.unit_price
+          amount:       { function: purchase_amount, args: { product: $target.product_id, quantity: $params.quantity } }
+          status:       발주완료
+          requested_by: $actor.id
+          ordered_at:   $now
+          note:         $params.note
+      - update: target
+        set:
+          units_on_order: { function: on_order_after, args: { product: $target.product_id, quantity: $params.quantity } }
+    emits: [purchase_ordered]
+
+  receive_purchase:
+    display_name: 입고 처리
+    description: 발주한 상품이 들어오면 재고를 늘리고 입고 예정을 줄인다 (운영 데이터에 되쓰기).
+    target: PurchaseOrder
+    parameters:
+      received_quantity: { type: integer, description: 실제로 들어온 수량 }
+    permission:
+      roles: [구매담당, 관리자]
+      actor_types: [human]
+    edits:
+      - update: target
+        set: { status: 입고완료, received_at: $now, received_quantity: $params.received_quantity }
+      - update_linked: product
+        set:
+          units_in_stock: { function: stock_after, args: { product: $target.product_id, quantity: $params.received_quantity } }
+          units_on_order: { function: on_order_after, args: { product: $target.product_id, quantity: $target.quantity, sign: -1 } }
+    emits: [purchase_received]
+
+  cancel_purchase:
+    display_name: 발주 취소
+    description: 아직 들어오지 않은 발주를 취소하고 입고 예정을 되돌린다.
+    target: PurchaseOrder
+    parameters:
+      reason: { type: string }
+    permission:
+      roles: [구매담당, 관리자]
+      actor_types: [human]
+    edits:
+      - update: target
+        set: { status: 취소, note: $params.reason }
+      - update_linked: product
+        set:
+          units_on_order: { function: on_order_after, args: { product: $target.product_id, quantity: $target.quantity, sign: -1 } }
+    emits: [purchase_cancelled]

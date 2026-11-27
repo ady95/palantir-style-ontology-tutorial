@@ -448,6 +448,26 @@ class Validator:
         return res.prop
 
     def _value(self, p: str, value: Any, prop: Property | None, action: Action) -> None:
+        if isinstance(value, dict) and "function" in value:          # 32장: Function 결과를 값으로
+            fn = self.onto.functions.get(value["function"])
+            if fn is None:
+                self.r.error(p, f"Function '{value['function']}' 이 없습니다")
+                return
+            extra = set(value) - {"function", "args"}
+            if extra:
+                self.r.error(p, f"값 Function 에는 function·args 만 씁니다 ({', '.join(sorted(extra))})")
+            args = value.get("args") or {}
+            for k, v in args.items():
+                if k not in fn.inputs:
+                    self.r.error(f"{p}.args.{k}", f"Function '{value['function']}' 에 입력 '{k}' 이 없습니다")
+                self._ref(f"{p}.args.{k}", v, action)
+            missing = [k for k, i in fn.inputs.items() if i.required and i.default is None and k not in args]
+            if missing:
+                self.r.error(p, f"Function '{value['function']}' 의 필수 입력이 빠졌습니다: {', '.join(missing)}")
+            if prop is not None and fn.returns.type != prop.type and \
+                    {fn.returns.type, prop.type} not in ({"decimal", "float"}, {"integer", "decimal"}):
+                self.r.error(p, f"Function '{value['function']}' 은 {fn.returns.type} 를 돌려주는데 속성은 {prop.type} 입니다")
+            return
         if isinstance(value, str) and value.startswith("$"):
             self._ref(p, value, action)
             return

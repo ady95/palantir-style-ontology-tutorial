@@ -708,7 +708,11 @@ class ActionEngine:
         return result
 
     def resolve(self, raw: Any, ts: ObjectSet, params: dict, actor: dict) -> Any:
-        """edit 값·Function 인자의 $참조를 실제 값으로"""
+        """edit 값·Function 인자의 $참조를 실제 값으로.
+        {function: 이름, args: {...}} 이면 Function 을 불러 그 결과를 값으로 쓴다 (32장: 재고 + 입고 수량 같은 계산)"""
+        if isinstance(raw, dict) and "function" in raw:
+            args = {k: self.resolve(v, ts, params, actor) for k, v in (raw.get("args") or {}).items()}
+            return self.client.functions.call(raw["function"], **args)
         if not (isinstance(raw, str) and raw.startswith("$")):
             return raw
         if raw == "$today":
