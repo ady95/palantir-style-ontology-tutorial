@@ -39,6 +39,8 @@ if TYPE_CHECKING:
 
 ENGINE_SCHEMA = "minionto"
 
+# 기록 시각은 now()(트랜잭션 시작 시각)가 아니라 clock_timestamp()(실제 기록 순간)를 쓴다.
+# 바깥 트랜잭션 하나에서 여러 Action 을 실행해도(체험 모드·테스트) 기록 순서가 시각에 남는다.
 DDL = f"""
 CREATE SCHEMA IF NOT EXISTS {ENGINE_SCHEMA};
 CREATE TABLE IF NOT EXISTS {ENGINE_SCHEMA}.action_log (
@@ -52,7 +54,7 @@ CREATE TABLE IF NOT EXISTS {ENGINE_SCHEMA}.action_log (
     messages     jsonb NOT NULL DEFAULT '[]',
     changes      jsonb NOT NULL DEFAULT '[]',
     approval_id  uuid,
-    created_at   timestamptz NOT NULL DEFAULT now()
+    created_at   timestamptz NOT NULL DEFAULT clock_timestamp()
 );
 CREATE TABLE IF NOT EXISTS {ENGINE_SCHEMA}.approval_requests (
     approval_id    uuid PRIMARY KEY,
@@ -68,7 +70,7 @@ CREATE TABLE IF NOT EXISTS {ENGINE_SCHEMA}.approval_requests (
     decided_at     timestamptz,
     comment        text,
     execution_id   uuid,
-    created_at     timestamptz NOT NULL DEFAULT now()
+    created_at     timestamptz NOT NULL DEFAULT clock_timestamp()
 );
 CREATE TABLE IF NOT EXISTS {ENGINE_SCHEMA}.outbox (
     event_id     bigserial PRIMARY KEY,
@@ -77,9 +79,13 @@ CREATE TABLE IF NOT EXISTS {ENGINE_SCHEMA}.outbox (
     object_type  text NOT NULL,
     target_pk    text NOT NULL,
     payload      jsonb NOT NULL,
-    created_at   timestamptz NOT NULL DEFAULT now(),
+    created_at   timestamptz NOT NULL DEFAULT clock_timestamp(),
     published_at timestamptz
 );
+-- 이전 버전에서 만든 테이블도 같은 기본값을 쓰도록
+ALTER TABLE {ENGINE_SCHEMA}.action_log        ALTER COLUMN created_at SET DEFAULT clock_timestamp();
+ALTER TABLE {ENGINE_SCHEMA}.approval_requests ALTER COLUMN created_at SET DEFAULT clock_timestamp();
+ALTER TABLE {ENGINE_SCHEMA}.outbox            ALTER COLUMN created_at SET DEFAULT clock_timestamp();
 """
 
 
@@ -360,7 +366,7 @@ class ActionEngine:
             def close(status: str, execution_id: str | None = None):
                 self.conn.execute(
                     f"""UPDATE {ENGINE_SCHEMA}.approval_requests
-                        SET status = %s, decided_by = %s, decided_at = now(), comment = %s, execution_id = %s
+                        SET status = %s, decided_by = %s, decided_at = clock_timestamp(), comment = %s, execution_id = %s
                         WHERE approval_id = %s""",
                     (status, _json(approver), comment, execution_id, approval_id))
 

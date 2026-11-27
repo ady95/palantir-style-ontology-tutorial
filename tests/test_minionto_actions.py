@@ -236,3 +236,13 @@ def test_failure_rolls_back_all_edits(tx):
                           res.execution_id) == "failed"                         # 실패 기록은 남는다
     finally:
         c.close()
+
+
+def test_log_times_follow_execution_order(tx):
+    """한 트랜잭션 안에서 여러 번 실행해도 실행 기록의 시각이 실행 순서대로 남는다 (clock_timestamp)"""
+    ids = [tx.actions.apply("update_risk_level", "C0001", actor=AI_AGENT,
+                            params={"level": "높음", "reason": "x"}).execution_id for _ in range(3)]
+    rows = tx.conn.execute("""SELECT execution_id::text AS id, created_at FROM minionto.action_log
+                              WHERE execution_id = ANY(%s::uuid[]) ORDER BY created_at""", (ids,)).fetchall()
+    assert [r["id"] for r in rows] == ids
+    assert rows[0]["created_at"] < rows[1]["created_at"] < rows[2]["created_at"]
