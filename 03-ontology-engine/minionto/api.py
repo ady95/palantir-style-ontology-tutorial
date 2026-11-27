@@ -18,7 +18,7 @@
   POST /v1/ontologies/{o}/approvals/{id}/decide
 
 실행자(actor)는 요청 본문이 아니라 인증 토큰에서 정한다. 호출하는 쪽이 자기 역할을 고를 수 없다.
-이 장의 API 키는 개발용이며, 20장에서 실제 인증·권한 정책으로 바꾼다.
+이 장의 API 키는 개발용이며, 21장에서 실제 인증·권한 정책으로 바꾼다.
 """
 
 from __future__ import annotations

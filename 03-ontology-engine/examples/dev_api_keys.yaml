@@ -1,7 +1,7 @@
 # 개발·실습용 API 키 — 토큰 → 실행자(actor)
 #
 # 실행자는 요청 본문이 아니라 토큰으로 정해진다. 호출하는 쪽이 자기 역할을 고를 수 없다.
-# 실습용 가짜 값이며, 운영에서는 20장의 인증·권한 정책(OIDC/JWT 등)으로 바꾼다.
+# 실습용 가짜 값이며, 운영에서는 21장의 인증·권한 정책(OIDC/JWT 등)으로 바꾼다.
 keys:
   dev-tax-accountant: { id: A001, role: 세무사, type: human }
   dev-staff-a003:     { id: A003, role: 실무자, type: human }

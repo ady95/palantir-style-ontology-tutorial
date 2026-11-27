@@ -354,7 +354,7 @@ uv run python -m minionto serve --registry --keys examples/dev_api_keys.yaml   #
 curl -s -H "Authorization: Bearer dev-ai-agent" -H "Content-Type: application/json"   -d '{"where":[{"field":"status","op":"eq","value":"자료수집중"}],"select":["return_id","due_date"],"limit":2}'   http://127.0.0.1:8800/v1/ontologies/taxos/objects/TaxReturn/search
 ```
 
-- 실행자(actor)는 **토큰에서** 정합니다. 본문에 `actor` 를 넣어도 무시됩니다. 개발용 키는 20장에서 실제 인증으로 바꿉니다.
+- 실행자(actor)는 **토큰에서** 정합니다. 본문에 `actor` 를 넣어도 무시됩니다. 개발용 키는 21장에서 실제 인증으로 바꿉니다.
 - 금액(decimal)은 정밀도를 지키려고 문자열(`"440.00"`)로 보냅니다.
 
 ### SDK: 메타데이터 → 타입 있는 클라이언트
@@ -395,9 +395,9 @@ uv run python examples/19_registry_api_sdk.py --commit   # Registry 등록·활�
 | 링크 개수와 속성 비교 불가 | "담당 고객 수 > max_workload" 를 조건식으로 못 씀 | `count_by` 후 판단, 또는 Function (`has_capacity`) |
 | 객체 링크 접근은 매번 질의 | `for r in returns: r.customer` 는 N+1 질의 | 표가 필요하면 `rows("customer.company_name")` 로 한 번에 |
 | 승인 요청에 만료 시간이 없음 | 오래된 요청이 남음 | 21장 승인 워크플로에서 기한·알림 추가 |
-| 변경 이력(before)은 action_log 에만 | 객체별 이력 조회가 불편 | 22장 감사 로그에서 객체 이력 뷰 |
+| 변경 이력(before)은 action_log 에만 | 객체별 이력 조회가 불편 | 24장 감사 로그에서 객체 이력 뷰 |
 | `pk`·`label` 등은 예약 이름 | 같은 이름의 속성은 `obj["pk"]` 로 읽음 | 검증기가 경고 |
-| API 키는 개발용 고정 파일 | 키 회전·만료·권한 범위 없음 | 20장 인증·정책 엔진 |
+| API 키는 개발용 고정 파일 | 키 회전·만료·권한 범위 없음 | 21장 인증·정책 엔진 |
 | API 는 요청마다 DB 연결을 새로 엶 | 동시 요청이 많으면 연결 비용 | 커넥션 풀(psycopg_pool) |
 | Registry 는 활성 버전 하나만 서빙 | 버전별 API 동시 제공(`/v1`, `/v2`) 불가 | 서버 재시작으로 전환, 이후 버전 라우팅 |
 | Registry 활성화는 서버를 다시 띄워야 반영 | 실행 중 정의 교체 없음 | 활성화 이벤트 구독 후 재적재 |
