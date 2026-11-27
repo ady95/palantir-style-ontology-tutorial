@@ -1,0 +1,174 @@
+# =============================================================================
+#  세무 온톨로지 매핑 (29장) — 의미 모델(OWL, PART 2) ↔ 운영형 정의(MiniOnto, PART 4~)
+#  - 자체 설계한 매핑 형식이다 (R2RML·RML 같은 표준을 단순화해 흉내 냄)
+#  - 운영형이 원본(source of truth)이다. 데이터는 운영 → RDF 한 방향으로만 내보낸다.
+# =============================================================================
+mapping:
+  name: taxos
+  version: 0.1.0
+  semantic: ../01-traditional-ontology/ontology/taxos.ttl
+  operational: ../03-ontology-engine/ontologies/taxos/ontology.yaml
+  prefixes:
+    tx:   https://example.org/taxos#
+    txd:  https://example.org/taxos/data/
+    rdfs: http://www.w3.org/2000/01/rdf-schema#
+  instance_base: txd          # 객체 IRI = txd: + iri 템플릿
+  minimal_types: true         # 다른 내보낸 클래스의 상위 클래스는 내보내지 않는다 (추론에 맡김)
+
+# -----------------------------------------------------------------------------
+# 객체 타입 ↔ 클래스
+#   subclasses.when: 속성 값으로 정해지는 하위 클래스 (OWL 의 하위 클래스 ↔ 운영형의 enum 값)
+#   properties:      운영형 속성 → 데이터 속성 (여러 개면 모두 내보냄)
+#   not_mapped:      의미 모델로 보내지 않는 속성과 이유 (빠뜨린 것과 일부러 뺀 것을 구분)
+# -----------------------------------------------------------------------------
+object_types:
+  Accountant:
+    class: tx:Accountant
+    iri: accountant/{accountant_id}
+    subclasses:
+      - { class: tx:TaxAccountant, when: { role: 세무사 } }
+      - { class: tx:Staff,         when: { role: 실무자 } }
+    properties:
+      accountant_id: tx:id
+      name:          [tx:name, rdfs:label]
+      team:          tx:team
+      max_workload:  tx:maxWorkload
+    not_mapped:
+      role:        하위 클래스(tx:TaxAccountant·tx:Staff)로 표현
+      can_approve: 승인 권한은 운영 규칙(21장) — 의미 모델에 없음
+      email:       개인정보 — 지식그래프에 넣지 않는다
+
+  Customer:
+    class: tx:Customer
+    iri: customer/{customer_id}
+    subclasses:
+      - { class: tx:IndividualBusiness, when: { business_type: 개인 } }
+      - { class: tx:Corporation,        when: { business_type: 법인 } }
+      - { class: tx:GeneralTaxpayer,    when: { vat_type: 일반과세자 } }
+      - { class: tx:SimplifiedTaxpayer, when: { vat_type: 간이과세자 } }
+    properties:
+      customer_id:     tx:id
+      company_name:    [tx:name, rdfs:label]
+      business_reg_no: tx:businessRegNo
+      industry:        tx:industry
+      business_status: tx:businessStatus
+      risk_level:      tx:riskLevel
+    not_mapped:
+      representative: 개인정보 — 지식그래프에 넣지 않는다
+      phone:          개인정보 — 지식그래프에 넣지 않는다
+      business_type:  하위 클래스(tx:IndividualBusiness·tx:Corporation)로 표현
+      vat_type:       하위 클래스(tx:GeneralTaxpayer·tx:SimplifiedTaxpayer)로 표현
+      accountant_id:  링크(tx:managedBy)로 표현
+      contracted_at:  의미 모델에 없음 (운영 정보)
+
+  TaxReturn:
+    class: tx:TaxReturn
+    iri: return/{return_id}
+    properties:
+      return_id: tx:id
+      tax_kind:  tx:taxKind
+      period:    tx:period
+      due_date:  tx:dueDate
+      status:    tx:returnStatus
+      filed_at:  tx:filedAt
+    not_mapped:
+      customer_id: 링크(tx:hasTaxReturn)로 표현
+
+  DocumentType:
+    class: tx:DocumentType
+    iri: doctype/{doc_type_code}
+    properties:
+      doc_type_code: tx:id
+      doc_name:      [tx:name, rdfs:label]
+    not_mapped:
+      for_general:     적용 대상은 운영 규칙 — 의미 모델에 없음
+      for_simplified:  적용 대상은 운영 규칙 — 의미 모델에 없음
+      for_corporation: 적용 대상은 운영 규칙 — 의미 모델에 없음
+
+  DocumentSubmission:
+    class: tx:DocumentSubmission
+    iri: submission/{submission_id}
+    properties:
+      status:       tx:submissionStatus
+      requested_at: tx:requestedAt
+      submitted_at: tx:submittedAt
+    not_mapped:
+      submission_id: IRI 로만 표현 (tx:id 없음)
+      return_id:     링크(tx:hasSubmission)로 표현
+      doc_type_code: 링크(tx:documentType)로 표현
+
+  Consultation:
+    class: tx:Consultation
+    iri: consultation/{consultation_id}
+    properties:
+      topic:        tx:topic
+      summary:      tx:summary
+      consulted_at: { property: tx:occurredAt, as: date }     # 일시 → 날짜 (의미 모델은 날짜만)
+    not_mapped:
+      consultation_id: IRI 로만 표현
+      customer_id:     링크(tx:hasConsultation)로 표현
+      accountant_id:   링크(tx:handledBy)로 표현
+      channel:         의미 모델에 없음
+
+  Task:
+    class: tx:Task
+    iri: task/{task_id}
+    properties:
+      task_type: tx:taskType
+      status:    tx:taskStatus
+      due_date:  tx:dueDate
+    not_mapped:
+      task_id:     IRI 로만 표현
+      customer_id: 링크(tx:hasTask)로 표현
+      return_id:   링크(tx:aboutReturn)로 표현
+      assignee_id: 링크(tx:assignedTo)로 표현
+      created_by:  운영 기록 (누가 만들었나) — 의미 모델에 없음
+      created_at:  운영 기록
+      note:        운영 기록
+
+  RiskEvent:
+    class: tx:RiskEvent
+    iri: risk/{event_id}
+    subclasses:
+      - { class: tx:LateFiling,     when: { event_type: 기한후신고 } }
+      - { class: tx:PenaltyTax,     when: { event_type: 가산세부과 } }
+      - { class: tx:NoContact,      when: { event_type: 연락두절 } }
+      - { class: tx:LateSubmission, when: { event_type: 자료지연제출 } }
+    properties:
+      occurred_at: tx:occurredAt
+      note:        rdfs:comment
+    not_mapped:
+      event_id:    IRI 로만 표현
+      event_type:  하위 클래스로 표현
+      customer_id: 링크(tx:hasRiskEvent)로 표현
+
+# -----------------------------------------------------------------------------
+# 링크 타입 ↔ 객체 속성
+#   direction: forward(기본) = from 객체가 주어, reverse = to 객체가 주어
+#   inverse:   OWL 의 역관계 — 링크 하나가 두 방향을 모두 가지므로 내보내지 않고 추론에 맡긴다
+# -----------------------------------------------------------------------------
+link_types:
+  customer_accountant:      { property: tx:managedBy,       inverse: tx:manages }
+  customer_tax_returns:     { property: tx:hasTaxReturn,    inverse: tx:filedFor }
+  tax_return_submissions:   { property: tx:hasSubmission,   inverse: tx:forReturn }
+  submission_document_type: { property: tx:documentType }
+  customer_consultations:   { property: tx:hasConsultation }
+  consultation_accountant:  { property: tx:handledBy }
+  customer_tasks:           { property: tx:hasTask }
+  tax_return_tasks:         { property: tx:aboutReturn, direction: reverse }
+  task_assignee:            { property: tx:assignedTo }
+  customer_risk_events:     { property: tx:hasRiskEvent }
+
+# -----------------------------------------------------------------------------
+# 한쪽에만 있는 것
+# -----------------------------------------------------------------------------
+not_mapped:
+  object_types:
+    Notification: 알림 발송 결과는 운영 기록(23장) — 의미 모델에 없음
+  link_types:
+    tax_return_notifications: 알림 발송 결과는 운영 기록
+    customer_notifications:   알림 발송 결과는 운영 기록
+
+semantic_only:
+  tx:LateFiler:           정의 클래스 — 위험 이벤트로 추론한다 (운영형에는 없음, 30장에서 추론 결과를 쓴다)
+  tx:UnreachableCustomer: 정의 클래스 — 위험 이벤트로 추론한다

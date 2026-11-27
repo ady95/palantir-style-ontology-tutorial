@@ -22,7 +22,7 @@ PostgreSQL + Python 기반 오픈소스로 직접 구현하고 AI 에이전트�
 | `03-ontology-engine/` | 범용 Mini Ontology Engine (MiniOnto) — 메타모델·YAML DSL·검증기·Object/Link·Function/Action Engine·Registry/API/SDK·상태 머신·인증·권한 정책 |
 | `04-security-governance/` | 권한·승인·감사 |
 | `05-agent-integration/` | MCP·LangGraph 연동 |
-| `06-hybrid-ontology/` | Semantic + Operational 하이브리드 |
+| `06-hybrid-ontology/` | Semantic + Operational 하이브리드 (29장 매핑부터) |
 | `07-northwind-project/` | Northwind 기반 주문·재고 관리 |
 | `08-tax-os-project/` | 세무 업무 자동화 (합성 데이터) |
 | `09-auto-ontology/` | Operational Ontology 자동 생성 |

@@ -31,6 +31,7 @@
   python -m minionto agent confirm ontologies/taxos/ontology.yaml <세션> <확인토큰> --actor A001,세무사,human
   python -m minionto workflow run ontologies/taxos/ontology.yaml --task W1 --today 2027-01-18 [--llm]  (27장)
   python -m minionto workflow resume|show ontologies/taxos/ontology.yaml --task W1 [--stop]
+  python -m minionto mapping check|export|draft ../06-hybrid-ontology/taxos_mapping.yaml [-o 파일] [--db]  (29장)
 """
 
 from __future__ import annotations
@@ -587,6 +588,41 @@ def cmd_workflow(args) -> int:
         return _wf_finish(graph, cfg)
 
 
+def cmd_mapping(args) -> int:
+    """의미 모델(OWL) ↔ 운영형 정의 매핑: 검증 · RDF 내보내기 · OWL 에서 정의 초안 (29장)"""
+    from .semantic import Mapping, axiom_checks, check, draft_from_owl, draft_yaml, export_rdf
+    m = Mapping.load(args.mapping)
+    if args.op == "check":
+        rep = check(m)
+        for k, (mapped, excluded, total) in rep.coverage.items():
+            print(f"{k:10s} 매핑 {mapped} · 이유 있는 제외 {excluded} · 전체 {total}")
+        for f in rep.findings:
+            print(f"[{f.level}] {f.side}: {f.message}")
+        if args.db:
+            from .objects import OntologyClient
+            with OntologyClient(m.onto, args.db_url) as c:
+                for a in axiom_checks(c, m):
+                    print(f"[공리] {a['axiom']} — 위반 {a['violations']}건")
+        print(f"오류 {len(rep.errors)}건")
+        return 1 if rep.errors else 0
+    if args.op == "draft":
+        text = draft_yaml(draft_from_owl(m.owl))
+        if args.output:
+            Path(args.output).write_text(text, encoding="utf-8")
+            print(f"초안 → {args.output}")
+        else:
+            print(text)
+        return 0
+    from .objects import OntologyClient
+    _load_env()
+    with OntologyClient(m.onto, args.db_url) as c:
+        g = export_rdf(c, m, actor=_actor(args.actor) if args.actor else None)
+    out = args.output or "export.ttl"
+    g.serialize(out, format="turtle")
+    print(f"트리플 {len(g):,}개 → {out}")
+    return 0
+
+
 def cmd_sdk(args) -> int:
     from .codegen import generate, metadata_from_file, metadata_from_url
     if args.url:
@@ -872,6 +908,15 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--today")
     sp.add_argument("--db-url")
     sp.set_defaults(func=cmd_workflow)
+
+    sp = sub.add_parser("mapping", help="OWL ↔ 운영형 정의 매핑: 검증·RDF 내보내기·정의 초안 (29장)")
+    sp.add_argument("op", choices=["check", "export", "draft"])
+    sp.add_argument("mapping", help="매핑 파일 (예: ../06-hybrid-ontology/taxos_mapping.yaml)")
+    sp.add_argument("-o", "--output")
+    sp.add_argument("--actor", help="export: 이 실행자의 권한으로 (id,역할,유형)")
+    sp.add_argument("--db", action="store_true", help="check: 공리를 DB 데이터로도 확인")
+    sp.add_argument("--db-url")
+    sp.set_defaults(func=cmd_mapping)
 
     sp = sub.add_parser("schema", help="에디터 자동완성용 JSON Schema 출력")
     sp.add_argument("-o", "--output")
