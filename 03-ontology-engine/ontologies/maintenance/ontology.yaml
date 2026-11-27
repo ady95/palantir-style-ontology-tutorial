@@ -1,0 +1,265 @@
+# yaml-language-server: $schema=../../schema/minionto.schema.json
+#
+# 설비 정비 온톨로지 (실습용, 35장)
+# - 데이터: datasets/maintenance (합성 데이터), DB: maintenance
+# - 엔진을 고치지 않고 정의만으로 세 번째 도메인을 올릴 수 있는지 확인하기 위한 정의
+
+ontology:
+  name: maintenance
+  version: 0.1.0
+  display_name: 공장 설비 정비 온톨로지
+  description: 설비·정비원·작업 지시를 객체로 정의하고, 점검 지시·고장 신고·배정·작업 시작·완료를 Action으로 실행한다.
+
+datasource:
+  url_env: MAINTENANCE_DATABASE_URL
+
+roles: [정비팀장, 정비원, AI비서]
+
+security:
+  row_policies:
+    own_line:
+      description: 정비원은 자기가 담당하는 설비와 자기 작업만 다룬다 (v0.1 우회 — 라인을 실행자 정보로 쓸 수 없음)
+      roles: [정비원]
+      rules:
+        Equipment: { field: technician_id, op: eq, value: $actor.id }
+        WorkOrder:
+          any:
+            - { field: technician_id, op: eq, value: $actor.id }
+            - { field: equipment.technician_id, op: eq, value: $actor.id }
+  property_policies:
+    contact_info:
+      description: AI 에이전트는 정비원의 연락처를 보지 않는다
+      actor_types: [agent]
+      hidden:
+        Technician: [phone]
+  audit_reads: [agent]
+
+object_types:
+  Technician:
+    display_name: 정비원
+    source: { table: technicians, primary_key: technician_id }
+    title_property: technician_id
+    properties:
+      technician_id:   { type: string, required: true }
+      line:            { type: enum, values: [A라인, B라인], required: true }
+      position:        { type: enum, values: [정비팀장, 정비원], required: true }
+      skill:           { type: enum, values: [전기, 기계], required: true }
+      phone:           { type: string }
+      max_open_orders: { type: integer, required: true, display_name: 동시 작업 한도 }
+
+  Equipment:
+    display_name: 설비
+    source: { table: equipment, primary_key: equipment_id }
+    title_property: equipment_name
+    properties:
+      equipment_id:          { type: string, required: true }
+      equipment_name:        { type: string, required: true }
+      line:                  { type: enum, values: [A라인, B라인], required: true }
+      criticality:           { type: enum, values: [상, 중, 하], required: true, display_name: 중요도 }
+      status:                { type: enum, values: [가동, 정지, 폐기], required: true }
+      inspection_cycle_days: { type: integer, required: true, display_name: 점검 주기(일) }
+      last_inspected:        { type: date, required: true, display_name: 마지막 점검일 }
+      technician_id:         { type: string, display_name: 담당 정비원 }
+
+  WorkOrder:
+    display_name: 작업 지시
+    description: 설비 점검·수리 작업. Action 으로만 만들고 상태를 바꾼다.
+    source: { table: work_orders, primary_key: order_id, id_strategy: prefixed_sequence, id_prefix: W }
+    title_property: order_id
+    properties:
+      order_id:       { type: string, required: true }
+      equipment_id:   { type: string, required: true }
+      technician_id:  { type: string }
+      kind:           { type: enum, values: [예방점검, 고장수리], required: true }
+      status:         { type: enum, values: [접수, 배정, 작업중, 완료, 취소], required: true }
+      estimated_cost: { type: decimal, required: true, display_name: 예상 비용 }
+      opened_at:      { type: date, required: true }
+      completed_at:   { type: date }
+      created_by:     { type: string, required: true }
+      note:           { type: string }
+    state_machine:
+      property: status
+      initial: [접수]
+      terminal: [완료, 취소]
+      transitions:
+        assign_technician: { from: 접수, to: 배정 }
+        start_work:        { from: 배정, to: 작업중 }
+        complete_work:     { from: 작업중, to: 완료 }
+        cancel_work_order: { from: [접수, 배정], to: 취소 }
+
+link_types:
+  equipment_technician:
+    { from: Equipment, to: Technician, cardinality: many_to_one,
+      from_key: technician_id, to_key: technician_id, forward_name: technician, reverse_name: equipment }
+  work_order_equipment:
+    { from: WorkOrder, to: Equipment, cardinality: many_to_one,
+      from_key: equipment_id, to_key: equipment_id, forward_name: equipment, reverse_name: work_orders }
+  work_order_technician:
+    { from: WorkOrder, to: Technician, cardinality: many_to_one,
+      from_key: technician_id, to_key: technician_id, forward_name: technician, reverse_name: work_orders }
+
+functions:
+  days_since_inspection:
+    description: 마지막 점검 뒤 지난 일수
+    inputs:
+      equipment: { type: object, object_type: Equipment }
+    returns: { type: integer }
+    implementation: functions:days_since_inspection
+
+  inspection_due:
+    description: 점검 주기가 지났는가 (마지막 점검 뒤 지난 일수 ≥ 점검 주기)
+    inputs:
+      equipment: { type: object, object_type: Equipment }
+    returns: { type: boolean }
+    implementation: functions:inspection_due
+
+  has_capacity:
+    description: 정비원이 지금 맡은 진행 중 작업(배정·작업중)이 동시 작업 한도보다 적은가
+    inputs:
+      technician: { type: object, object_type: Technician }
+    returns: { type: boolean }
+    implementation: functions:has_capacity
+
+  same_line:
+    description: 작업 지시의 설비와 정비원이 같은 라인인가
+    inputs:
+      work_order: { type: object, object_type: WorkOrder }
+      technician: { type: object, object_type: Technician }
+    returns: { type: boolean }
+    implementation: functions:same_line
+
+actions:
+  open_inspection:
+    display_name: 예방점검 지시
+    description: 점검 주기가 지난 가동 중 설비에 예방점검 작업 지시를 만든다.
+    target: Equipment
+    parameters:
+      note: { type: string, required: false }
+    preconditions:
+      - message: 가동 중인 설비만 예방점검을 지시합니다.
+        check: { field: status, op: eq, value: 가동 }
+      - message: 점검 주기가 아직 지나지 않았습니다.
+        check: { function: inspection_due, args: { equipment: $target.equipment_id } }
+      - message: 이미 진행 중인 예방점검 작업이 있습니다. (중복 방지)
+        check:
+          none:
+            link: work_orders
+            where:
+              all:
+                - { field: kind, op: eq, value: 예방점검 }
+                - { field: status, op: in, value: [접수, 배정, 작업중] }
+    permission:
+      roles: [정비팀장, 정비원, AI비서]
+    edits:
+      - create: WorkOrder
+        values:
+          equipment_id:   $target.equipment_id
+          kind:           예방점검
+          status:         접수
+          estimated_cost: 200000
+          opened_at:      $today
+          created_by:     $actor.type
+          note:           $params.note
+    emits: [inspection_opened]
+
+  report_failure:
+    display_name: 고장 신고
+    description: 설비를 정지로 바꾸고 고장수리 작업 지시를 만든다.
+    target: Equipment
+    parameters:
+      estimated_cost: { type: decimal, description: 예상 수리 비용 }
+      note:           { type: string }
+    preconditions:
+      - message: 폐기된 설비입니다.
+        check: { field: status, op: ne, value: 폐기 }
+      - message: 이미 진행 중인 고장수리 작업이 있습니다.
+        check:
+          none:
+            link: work_orders
+            where:
+              all:
+                - { field: kind, op: eq, value: 고장수리 }
+                - { field: status, op: in, value: [접수, 배정, 작업중] }
+    permission:
+      roles: [정비팀장, 정비원]
+      actor_types: [human]
+    edits:
+      - update: target
+        set: { status: 정지 }
+      - create: WorkOrder
+        values:
+          equipment_id:   $target.equipment_id
+          kind:           고장수리
+          status:         접수
+          estimated_cost: $params.estimated_cost
+          opened_at:      $today
+          created_by:     $actor.type
+          note:           $params.note
+    emits: [failure_reported]
+
+  assign_technician:
+    display_name: 정비원 배정
+    target: WorkOrder
+    parameters:
+      technician: { type: object, object_type: Technician }
+    preconditions:
+      - message: 설비와 같은 라인의 정비원만 배정합니다.
+        check: { function: same_line, args: { work_order: $target.order_id, technician: $params.technician } }
+      - message: 정비원의 진행 중 작업이 동시 작업 한도에 도달했습니다.
+        check: { function: has_capacity, args: { technician: $params.technician } }
+    permission:
+      roles: [정비팀장]
+      actor_types: [human]
+    edits:
+      - update: target
+        set: { technician_id: $params.technician, status: 배정 }
+    emits: [technician_assigned]
+
+  start_work:
+    display_name: 작업 시작
+    description: 배정된 정비원이 작업을 시작한다. 예상 비용 300만 원 이상의 고장수리는 정비팀장 승인 뒤 시작한다.
+    target: WorkOrder
+    permission:
+      roles: [정비팀장, 정비원]
+      actor_types: [human]
+      check: { field: technician_id, op: eq, value: $actor.id }
+    approval:
+      required_if:
+        all:
+          - { field: kind, op: eq, value: 고장수리 }
+          - { field: estimated_cost, op: gte, value: 3000000 }
+      approver_roles: [정비팀장]
+      reason: 예상 비용 300만 원 이상의 수리는 정비팀장 승인 뒤 시작합니다.
+      expires_in: 24h
+    edits:
+      - update: target
+        set: { status: 작업중 }
+    emits: [work_started]
+
+  complete_work:
+    display_name: 작업 완료
+    description: 작업을 완료하고 설비를 가동으로, 마지막 점검일을 오늘로 바꾼다.
+    target: WorkOrder
+    permission:
+      roles: [정비팀장, 정비원]
+      actor_types: [human]
+      check: { field: technician_id, op: eq, value: $actor.id }
+    edits:
+      - update: target
+        set: { status: 완료, completed_at: $today }
+      - update_linked: equipment
+        set: { status: 가동, last_inspected: $today }
+    emits: [work_completed]
+
+  cancel_work_order:
+    display_name: 작업 지시 취소
+    target: WorkOrder
+    parameters:
+      reason: { type: string }
+    permission:
+      roles: [정비팀장]
+      actor_types: [human]
+    edits:
+      - update: target
+        set: { status: 취소, note: $params.reason }
+    emits: [work_order_cancelled]
