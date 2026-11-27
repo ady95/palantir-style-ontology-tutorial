@@ -168,7 +168,7 @@ class FilingRiskWorkflow:
             ret = s.call("get_object", {"object_type": "TaxReturn", "id": it["return_id"]})["object"]
             cust = s.call("get_object", {"object_type": "Customer", "id": it["customer_id"]})["object"]
             docs = s.call("call_function", {"name": "missing_documents",
-                                            "args": {"tax_return": it["return_id"]}})["result"]
+                                            "args": {"tax_return": it["return_id"]}}).get("result", [])
             chk = s.call("check_action", {"action": REQ, "target": it["return_id"]})
         names = state.get("doc_names", {})
         it.update(company_name=cust.get("company_name"), customer_risk=cust.get("risk_level"),
@@ -271,7 +271,7 @@ class FilingRiskWorkflow:
                 t = audit.trace(it["execution_id"]) if it.get("execution_id") else {}
                 ex = t.get("execution") or {}
                 docs = s.call("call_function", {"name": "missing_documents",
-                                                "args": {"tax_return": it["return_id"]}})["result"]
+                                                "args": {"tax_return": it["return_id"]}}).get("result", [])
                 left = [d["doc_type_code"] for d in docs if d["status"] == "미요청"]
                 why = []
                 if ex.get("status") != "completed":

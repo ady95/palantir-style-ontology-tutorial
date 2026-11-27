@@ -142,3 +142,11 @@ def test_check_note():
     report = {"completed": ["R00146"], "handoff_by_reason": {"사유": ["R00024"]}}
     assert check_summary("R00146 완료, R00024 넘김", report) == []
     assert check_summary("R00146, R09999 완료", report) == ["보고에 없는 ID R09999"]
+
+
+def test_all_collecting_returns_including_ones_without_documents(tx):
+    """min_score=0 — 자료 행이 없는 신고(빈 Function 결과)도 처리한다 (28장 실험에서 찾은 버그)"""
+    _, _, out = start(tx, task="t4", min_score=0)
+    st = by_status(out)
+    assert len(out["items"]) == 108
+    assert len(st["completed"]) == 25 and len(st["approval_required"]) == 3 and len(st["handoff"]) == 80
