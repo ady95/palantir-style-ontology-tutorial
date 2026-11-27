@@ -18,6 +18,7 @@
 | 22 | 잠금 대기 시간 · 멱등 키 · 승인 요청 중복 방지 · 오류 분류와 자동 재시도 · 보상 Action | ✅ v0.1 |
 | 23 | 아웃박스 발송 작업자 · 재시도·순서·dead · 외부 멱등 키 · 발송 결과를 객체로 기록 | ✅ v0.1 |
 | 24 | 감사 로그(객체 이력·실행 추적·해시 체인·완전성 점검·지표) · 이벤트 구독 · 피드백 | ✅ v0.1 |
+| 25 | AI 에이전트 인터페이스: 실행자별 컨텍스트·도구 6개·다음 행동 안내·읽은 값 expect·업무 단위 멱등 키·확인 모드 | ✅ v0.1 |
 
 > 세무 정의(taxos)는 장이 진행되며 버전이 오릅니다. 각 장 원고의 출력은 그 장의 태그 기준입니다.
 >
@@ -54,6 +55,8 @@
 │   ├── outbox.py             # 아웃박스 발송 작업자: 재시도·순서·SKIP LOCKED·dead               [23장]
 │   ├── audit.py              # 감사 로그: 객체 이력·실행 추적·완전성 점검·운영 지표             [24장]
 │   ├── subscriptions.py      # 이벤트 구독: check() 후 시스템 실행자로 Action, 재처리          [24장]
+│   ├── agent.py              # AI 에이전트 인터페이스: 컨텍스트·도구 정의·도구 실행(AgentSession) [25장]
+│   ├── llm.py                # OpenAI 호환 API 도구 호출 루프 (run_agent)                     [25장]
 │   ├── loader.py, cli.py
 ├── examples/17_object_link_engine.py   # PART 2 SPARQL 질문을 엔진으로 다시 풀기
 ├── examples/17_compare_sparql.py       # SPARQL(RDF 그래프)과 엔진(운영 DB)의 결과 ID 집합 대조
@@ -65,6 +68,7 @@
 ├── examples/23_outbox_notifications.py    # 직접 호출의 사고 → 아웃박스 발송 → 장애·순서 → 중단 → 영구 실패
 ├── examples/mock_notifier.py              # 실습용 모의 발송 서비스 (멱등 키, 일시 장애, 수신 거부)
 ├── examples/24_audit_feedback.py          # 요청 이후 추적 → 이력·추적 → 완전성 점검·재처리 → 피드백 → 지표
+├── examples/25_agent_interface.py         # 컨텍스트 크기 → 도구 목록 → 도구 직접 호출 → 확인 모드 → (--llm) LLM 에이전트
 ├── examples/dev_api_keys.yaml             # 개발용 API 키 (토큰 → 실행자)
 ├── ontologies/               # 도메인 정의 (엔진 코드 수정 없이 교체)
 │   ├── taxos/ontology.yaml       # 세무 v0.6.0: Object 9 · Link 12 · Function 4 · Action 11 · 상태 머신 3 · 정책 2 · 구독 1
@@ -592,6 +596,37 @@ uv run python -m minionto subscriptions run ontologies/taxos/ontology.yaml
 uv run python examples/24_audit_feedback.py
 ```
 
+## AI 에이전트 인터페이스 (25장)
+
+```python
+from minionto.agent import AgentSession
+from minionto.llm import ChatClient, run_agent
+
+ai = {"id": "agent-01", "role": "AI비서", "type": "agent"}
+s = AgentSession(onto, ai, task_id="T-1")      # confirm=True 면 실행은 사람이 s.confirm(token) 으로
+s.context_text()                                # 이 실행자에게 보이는 것·할 수 있는 것만 (시스템 프롬프트용)
+s.tools()                                       # OpenAI 호환 tool 정의 6개 (style="per_action" 이면 Action 마다)
+s.call("get_object", {"object_type": "TaxReturn", "id": "R00006"})
+s.call("run_action", {"action": "request_missing_documents", "target": "R00006"})
+run_agent(ChatClient(), s, "R00006 신고에 빠진 자료를 요청해 줘.")   # .env 의 OPENAI_* 사용
+```
+
+| 도구 | 하는 일 |
+|---|---|
+| find_objects · get_object | 조회 (행·속성 정책 적용, 최대 행 수 제한, 읽은 상태를 기억) |
+| call_function | Function 호출 (입력 객체 가시성 검사, 결과에서 감춘 속성 제거) |
+| list_actions · check_action | 지금 할 수 있는 일과 이유 (바꾸지 않음) |
+| run_action | 실행. 읽지 않은 대상은 read_first, 읽은 상태를 expect 로, 멱등 키 `agent:<업무>:<Action>:<대상>` |
+
+모든 도구는 예외 없이 `{status, messages, ..., next_step}` 을 돌려준다. status: ok · ready · preview · completed ·
+replayed · approval_required · needs_input · rejected · stale · denied · invalid · read_first · retry · failed ·
+confirmation_required · budget_exceeded.
+
+```bash
+uv run python examples/25_agent_interface.py          # LLM 없이 1~4단계
+uv run python examples/25_agent_interface.py --llm    # LLM 에이전트 (반복: --repeat 3)
+```
+
 ## v0.1의 제약 (의도적으로 단순화)
 
 | 제약 | 영향 | 대안 |
@@ -615,6 +650,9 @@ uv run python examples/24_audit_feedback.py
 | 발송 작업자는 outbox.status, 구독은 event_deliveries | 이벤트 소비 방식이 두 가지 | 발송 작업자도 구독자로 옮기기 |
 | 엔진 밖 변경 점검은 엔진이 기록한 객체만 | 엔진이 한 번도 바꾸지 않은 객체의 직접 변경은 찾지 못함 | DB 트리거로 변경 기록, 쓰기 권한 제한 |
 | 해시 체인은 같은 DB 안 | DB 관리자가 체인 전체를 다시 계산하면 못 찾음 | 주기적으로 마지막 해시를 외부(별도 저장소)에 남기기 |
+| 에이전트 세션의 읽은 상태·확인 토큰은 메모리에만 | 프로세스가 끝나면 사라짐, 여러 프로세스가 공유 못 함 | 세션 저장소(DB)에 두기 |
+| 에이전트 도구에 집계(그룹별 건수)가 없음 | 그룹별 질문은 여러 번 조회해야 함 | count_by 도구 추가 |
+| 확인 모드는 미리보기 시점과 실행 시점 사이 변경을 expect(상태)로만 확인 | 상태 밖 속성이 바뀌어도 그대로 실행 | 미리보기와 실제 변경 비교(21장 승인의 _check_preview 방식) |
 | 외부 호출 결과는 발송 후 기록만 | 외부가 먼저 성공해야 하는 Write-back(예: 전자신고 제출)은 구현하지 않음 | 외부 먼저 호출 + 멱등 키 + 결과를 Action 으로 기록 + 대사(reconciliation) |
 | API 는 요청마다 DB 연결을 새로 엶 | 동시 요청이 많으면 연결 비용 | 커넥션 풀(psycopg_pool) |
 | Registry 는 활성 버전 하나만 서빙 | 버전별 API 동시 제공(`/v1`, `/v2`) 불가 | 서버 재시작으로 전환, 이후 버전 라우팅 |
