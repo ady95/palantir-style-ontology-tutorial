@@ -38,7 +38,8 @@ def functions(onto: OntologyClient) -> None:
     print("filing_delay_risk :", fn.call("filing_delay_risk", customer=customer))
     print("has_capacity(A002):", fn.call("has_capacity", accountant="A002"), " ← 기본키만 넘겨도 객체로 바뀐다")
     print("has_capacity(A004):", fn.call("has_capacity", accountant="A004"))
-    print("recommend_assignee:", fn.call("recommend_assignee", customer=customer))
+    best = fn.call("recommend_assignee", customer=customer)
+    print("recommend_assignee:", best.object_type, best.pk)
 
 
 def actions(onto: OntologyClient) -> None:
@@ -71,7 +72,7 @@ def actions(onto: OntologyClient) -> None:
     cust = onto.objects("Customer").where(accountant_id="A002", business_status="영업").order_by("customer_id").first()
     print(eng.apply("assign_accountant", cust, actor=TAX_ACCOUNTANT, params={"accountant": "A003"}))
     best = onto.functions.call("recommend_assignee", customer=cust)
-    print("추천 담당자:", best)
+    print("추천 담당자:", best.pk)
     print(eng.apply("assign_accountant", cust, actor=AI_AGENT, params={"accountant": best}))
     print(eng.apply("assign_accountant", cust, actor=TAX_ACCOUNTANT, params={"accountant": best}))
 
