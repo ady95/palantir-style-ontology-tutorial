@@ -66,8 +66,16 @@ def public_metadata(onto: Ontology, *, version: str | None = None, checksum: str
                "transitions": [{"object_type": r.object_type, "property": r.property,
                                 "from": list(r.from_), "to": r.to} for r in states.rules_for_action(name)]}
         for name, act in onto.actions.items()}
+    sec = onto.security
+    security = {
+        "row_policies": {n: {"description": p.description, "roles": p.roles, "actor_types": p.actor_types,
+                             "object_types": sorted(p.rules)} for n, p in sec.row_policies.items()},
+        "property_policies": {n: {"description": p.description, "roles": p.roles, "actor_types": p.actor_types,
+                                  "hidden": p.hidden} for n, p in sec.property_policies.items()},
+    }
     return {
         "name": info.name, "version": version or info.version, "checksum": checksum,
         "display_name": info.display_name, "description": info.description, "roles": onto.roles,
         "object_types": object_types, "functions": functions, "actions": actions,
+        "security": security,             # 21장: 정책 이름·설명·대상 (조건식은 내보내지 않는다)
     }

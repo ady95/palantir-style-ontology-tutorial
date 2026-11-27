@@ -20,7 +20,8 @@
   POST /v1/ontologies/{o}/approvals/{id}/decide
 
 실행자(actor)는 요청 본문이 아니라 인증 토큰에서 정한다. 호출하는 쪽이 자기 역할을 고를 수 없다.
-이 장의 API 키는 개발용이며, 21장에서 실제 인증·권한 정책으로 바꾼다.
+21장: 서명된 토큰(JwtAuth)과 범위(scope)로 인증하고, 모든 조회·실행에 권한 정책(행·속성)을 적용한다.
+19장의 개발용 API 키(ApiKeyAuth)도 그대로 쓸 수 있다.
 """
 
 from __future__ import annotations
@@ -41,8 +42,10 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
+from .auth import ApiKeyAuth, AuthError, Principal
 from .describe import public_metadata
 from .functions import FunctionError
+from .policy import PolicyError
 from .metamodel import Ontology
 from .objects import ObjectSet, OntologyClient, OntoObject
 from .query import QueryError
@@ -135,8 +138,11 @@ class DecideRequest(BaseModel):
 def plain(value: Any) -> Any:
     """응답용 값: 객체는 {object_type, pk, label, properties}, Decimal 은 정밀도를 지키려 문자열"""
     if isinstance(value, OntoObject):
-        return {"object_type": value.object_type, "pk": value.pk, "label": value.label,
-                "properties": plain(value.properties)}
+        out = {"object_type": value.object_type, "pk": value.pk, "label": value.label,
+               "properties": plain(value.properties)}
+        if value.restricted:
+            out["hidden"] = sorted(value.restricted)
+        return out
     if isinstance(value, ObjectSet):
         return [plain(o) for o in value.all()]
     if isinstance(value, dict):
@@ -149,12 +155,17 @@ def plain(value: Any) -> Any:
 
 
 # ====================================================================== 앱
-def create_app(served: list[Served] | dict[str, Served], *, api_keys: dict[str, dict],
-               today: date | str | None = None,
+def create_app(served: list[Served] | dict[str, Served], *, api_keys: dict[str, dict] | None = None,
+               auth: Any = None, today: date | str | None = None,
                connect: Callable[[Served], Any] | None = None) -> FastAPI:
-    """connect(served) 는 OntologyClient 를 내주는 컨텍스트 매니저. 기본은 요청마다 새 연결.
+    """auth: authenticate(token) → Principal 을 가진 객체 (JwtAuth). 없으면 api_keys 로 ApiKeyAuth.
+    connect(served) 는 OntologyClient 를 내주는 컨텍스트 매니저. 기본은 요청마다 새 연결.
     테스트는 트랜잭션을 열어 둔 클라이언트를 내주는 connect 를 넘겨 모든 변경을 롤백한다."""
     catalog = served if isinstance(served, dict) else {s.name: s for s in served}
+    if auth is None:
+        if api_keys is None:
+            raise ValueError("auth 또는 api_keys 가 필요합니다")
+        auth = ApiKeyAuth(api_keys)
 
     @contextmanager
     def default_connect(s: Served) -> Iterator[OntologyClient]:
@@ -170,11 +181,16 @@ def create_app(served: list[Served] | dict[str, Served], *, api_keys: dict[str, 
     bearer = HTTPBearer(auto_error=False)
 
     # ------------------------------------------------------------------ 의존성
-    def current_actor(cred: HTTPAuthorizationCredentials | None = Depends(bearer)) -> dict:
-        actor = api_keys.get(cred.credentials) if cred else None
-        if actor is None:
-            raise HTTPException(401, "유효한 API 키가 필요합니다 (Authorization: Bearer <키>)")
-        return dict(actor)
+    def current_principal(cred: HTTPAuthorizationCredentials | None = Depends(bearer)) -> Principal:
+        if cred is None:
+            raise HTTPException(401, "인증이 필요합니다 (Authorization: Bearer <토큰>)")
+        try:
+            return auth.authenticate(cred.credentials)
+        except AuthError as e:
+            raise HTTPException(401, str(e)) from None
+
+    def current_actor(principal: Principal = Depends(current_principal)) -> dict:
+        return dict(principal.actor)
 
     def served_of(ontology: str) -> Served:
         if ontology not in catalog:
@@ -185,6 +201,18 @@ def create_app(served: list[Served] | dict[str, Served], *, api_keys: dict[str, 
         with connect(s) as client:
             yield client
 
+    def require(scope: str):
+        """이 엔드포인트에 필요한 토큰 범위. 없으면 403 + 정책 판단 기록"""
+        def dep(principal: Principal = Depends(current_principal),
+                client: OntologyClient = Depends(client_of)) -> dict:
+            if not principal.has(scope):
+                client.policy.log(principal.actor, "deny", "scope", detail={"scope": scope,
+                                                                             "scopes": sorted(principal.scopes)})
+                raise HTTPException(403, f"토큰 범위(scope)에 '{scope}' 가 없습니다 "
+                                         f"(이 토큰: {', '.join(sorted(principal.scopes)) or '없음'})")
+            return dict(principal.actor)
+        return dep
+
     def check_type(client: OntologyClient, object_type: str) -> None:
         if object_type not in client.onto.object_types:
             raise HTTPException(404, f"객체 타입 '{object_type}' 이 없습니다")
@@ -192,7 +220,7 @@ def create_app(served: list[Served] | dict[str, Served], *, api_keys: dict[str, 
     def build(client: OntologyClient, object_type: str, where: list[dict], steps: list[Step],
               actor: dict) -> ObjectSet:
         check_type(client, object_type)
-        q = client.objects(object_type).as_actor(actor)
+        q = client.objects(object_type).secure(actor)          # 21장: 실행자에게 보이는 범위
         for cond in where:
             q = q.where(cond)
         for step in steps:
@@ -204,6 +232,10 @@ def create_app(served: list[Served] | dict[str, Served], *, api_keys: dict[str, 
     @app.exception_handler(QueryError)
     def _query_error(request: Request, exc: QueryError):
         return JSONResponse({"detail": str(exc)}, status_code=400)
+
+    @app.exception_handler(PolicyError)
+    def _policy_error(request: Request, exc: PolicyError):
+        return JSONResponse({"detail": str(exc)}, status_code=403)
 
     @app.exception_handler(FunctionError)
     def _function_error(request: Request, exc: FunctionError):
@@ -220,22 +252,28 @@ def create_app(served: list[Served] | dict[str, Served], *, api_keys: dict[str, 
                  "display_name": s.onto.ontology.display_name} for s in catalog.values()]
 
     @app.get("/v1/ontologies/{ontology}", tags=["meta"])
-    def metadata(s: Served = Depends(served_of), actor: dict = Depends(current_actor)):
-        return public_metadata(s.onto, version=s.version, checksum=s.checksum)
+    def metadata(s: Served = Depends(served_of), principal: Principal = Depends(current_principal)):
+        meta = public_metadata(s.onto, version=s.version, checksum=s.checksum)
+        actor = {k: v for k, v in principal.actor.items() if k != "token_id"}
+        meta["you"] = {"actor": actor, "scopes": sorted(principal.scopes), "auth": principal.method,
+                       "expires_at": principal.expires_at.isoformat() if principal.expires_at else None,
+                       **s.client().policy.describe_for(principal.actor)}
+        return meta
 
     # ------------------------------------------------------------------ Object · Link
     @app.post("/v1/ontologies/{ontology}/objects/{object_type}/search", tags=["objects"])
     def search(object_type: str, body: SearchRequest, client: OntologyClient = Depends(client_of),
-               actor: dict = Depends(current_actor)):
+               actor: dict = Depends(require("objects:read"))):
         q = build(client, object_type, body.where, body.steps, actor)
         page = q.order_by(*body.order_by).offset(body.offset).limit(body.limit)
         data = page.rows(*body.select) if body.select else [o.properties for o in page.all()]
         return {"object_type": q.object_type, "total": q.count(), "limit": body.limit,
-                "offset": body.offset, "data": plain(data)}
+                "offset": body.offset, "hidden": sorted(client.policy.hidden(q.object_type, actor)),
+                "data": plain(data)}
 
     @app.post("/v1/ontologies/{ontology}/objects/{object_type}/aggregate", tags=["objects"])
     def aggregate(object_type: str, body: AggregateRequest, client: OntologyClient = Depends(client_of),
-                  actor: dict = Depends(current_actor)):
+                  actor: dict = Depends(require("objects:read"))):
         q = build(client, object_type, body.where, body.steps, actor)
         out: dict[str, Any] = {"object_type": q.object_type}
         if body.count_by:
@@ -246,6 +284,18 @@ def create_app(served: list[Served] | dict[str, Served], *, api_keys: dict[str, 
         if len(out) == 1:
             out["count"] = q.count()
         return out
+
+    def visible_object(client: OntologyClient, object_type: str, pk: str, actor: dict):
+        """실행자에게 보이는 객체. 없거나 보이지 않으면 똑같이 404 (존재 여부도 알려 주지 않는다)"""
+        value = pk_value(client, object_type, pk)
+        obj = client.get(object_type, value, actor=actor)
+        if obj is None:
+            if client.get(object_type, value) is not None:          # 있지만 범위 밖 → 판단 기록
+                names = ", ".join(n for n, _ in client.policy.row_rules(object_type, actor))
+                client.policy.log(actor, "deny", "row", object_type, str(value), policy=names,
+                                  detail={"use": "조회"})
+            raise HTTPException(404, f"{object_type}({pk}) 를 찾을 수 없습니다")
+        return obj
 
     def pk_value(client: OntologyClient, object_type: str, pk: str) -> Any:
         ot = client.onto.object_types[object_type]
@@ -258,24 +308,20 @@ def create_app(served: list[Served] | dict[str, Served], *, api_keys: dict[str, 
 
     @app.get("/v1/ontologies/{ontology}/objects/{object_type}/{pk}", tags=["objects"])
     def get_object(object_type: str, pk: str, client: OntologyClient = Depends(client_of),
-                   actor: dict = Depends(current_actor)):
+                   actor: dict = Depends(require("objects:read"))):
         check_type(client, object_type)
-        obj = client.get(object_type, pk_value(client, object_type, pk))
-        if obj is None:
-            raise HTTPException(404, f"{object_type}({pk}) 를 찾을 수 없습니다")
+        obj = visible_object(client, object_type, pk, actor)
         return {**plain(obj), "links": sorted(client.schema.links[object_type])}
 
     @app.get("/v1/ontologies/{ontology}/objects/{object_type}/{pk}/links/{link}", tags=["objects"])
     def get_linked(object_type: str, pk: str, link: str, limit: int = 20, offset: int = 0,
-                   client: OntologyClient = Depends(client_of), actor: dict = Depends(current_actor)):
+                   client: OntologyClient = Depends(client_of), actor: dict = Depends(require("objects:read"))):
         check_type(client, object_type)
         end = client.schema.links[object_type].get(link)
         if end is None:
             raise HTTPException(404, f"{object_type} 에 링크 '{link}' 가 없습니다")
-        obj = client.get(object_type, pk_value(client, object_type, pk))
-        if obj is None:
-            raise HTTPException(404, f"{object_type}({pk}) 를 찾을 수 없습니다")
-        linked = obj.link(link)
+        obj = visible_object(client, object_type, pk, actor)
+        linked = obj.link(link)                                  # 링크를 따라가도 같은 실행자의 범위
         if not end.many:
             first = linked.first()
             return {"object_type": end.target, "many": False, "data": plain(first) if first else None}
@@ -284,25 +330,25 @@ def create_app(served: list[Served] | dict[str, Served], *, api_keys: dict[str, 
 
     @app.get("/v1/ontologies/{ontology}/objects/{object_type}/{pk}/actions", tags=["objects"])
     def available(object_type: str, pk: str, client: OntologyClient = Depends(client_of),
-                  actor: dict = Depends(current_actor)):
+                  actor: dict = Depends(require("objects:read"))):
         check_type(client, object_type)
-        if client.get(object_type, pk_value(client, object_type, pk)) is None:
-            raise HTTPException(404, f"{object_type}({pk}) 를 찾을 수 없습니다")
+        visible_object(client, object_type, pk, actor)
         return client.actions.available(object_type, pk_value(client, object_type, pk), actor=actor).to_dict()
 
     @app.get("/v1/ontologies/{ontology}/objects/{object_type}/{pk}/history", tags=["objects"])
     def state_history(object_type: str, pk: str, client: OntologyClient = Depends(client_of),
-                      actor: dict = Depends(current_actor)):
+                      actor: dict = Depends(require("objects:read"))):
         check_type(client, object_type)
+        visible_object(client, object_type, pk, actor)
         return {"object_type": object_type, "pk": pk, "data": plain(client.actions.history(object_type, pk))}
 
     # ------------------------------------------------------------------ Function
     @app.post("/v1/ontologies/{ontology}/functions/{function}", tags=["functions"])
     def call_function(function: str, body: FunctionRequest, client: OntologyClient = Depends(client_of),
-                      actor: dict = Depends(current_actor)):
+                      actor: dict = Depends(require("functions:call"))):
         if function not in client.onto.functions:
             raise HTTPException(404, f"Function '{function}' 이 없습니다")
-        return {"function": function, "result": plain(client.functions.call(function, **body.args))}
+        return {"function": function, "result": plain(client.functions.call_as(actor, function, **body.args))}
 
     # ------------------------------------------------------------------ Action
     def check_action(client: OntologyClient, action: str) -> None:
@@ -314,7 +360,7 @@ def create_app(served: list[Served] | dict[str, Served], *, api_keys: dict[str, 
 
     @app.get("/v1/ontologies/{ontology}/actions/{action}/candidates", tags=["actions"])
     def candidates(action: str, limit: int = 20, client: OntologyClient = Depends(client_of),
-                   actor: dict = Depends(current_actor)):
+                   actor: dict = Depends(require("actions:apply"))):
         check_action(client, action)
         q = client.actions.candidates(action, actor=actor)
         page = q.limit(min(max(limit, 1), MAX_LIMIT)).all()
@@ -324,19 +370,19 @@ def create_app(served: list[Served] | dict[str, Served], *, api_keys: dict[str, 
 
     @app.post("/v1/ontologies/{ontology}/actions/{action}/apply", tags=["actions"])
     def apply(action: str, body: ApplyRequest, client: OntologyClient = Depends(client_of),
-              actor: dict = Depends(current_actor)):
+              actor: dict = Depends(require("actions:apply"))):
         check_action(client, action)
         return action_response(client.actions.apply(action, body.target, actor=actor, params=body.params,
                                                     dry_run=body.dry_run, expect=body.expect))
 
     @app.get("/v1/ontologies/{ontology}/approvals", tags=["actions"])
-    def approvals(client: OntologyClient = Depends(client_of), actor: dict = Depends(current_actor)):
+    def approvals(client: OntologyClient = Depends(client_of), actor: dict = Depends(require("approvals:decide"))):
         mine = [r for r in client.actions.pending_approvals() if actor["role"] in r["approver_roles"]]
         return {"data": plain(mine)}
 
     @app.post("/v1/ontologies/{ontology}/approvals/{approval_id}/decide", tags=["actions"])
     def decide(approval_id: str, body: DecideRequest, client: OntologyClient = Depends(client_of),
-               actor: dict = Depends(current_actor)):
+               actor: dict = Depends(require("approvals:decide"))):
         try:
             uuid.UUID(approval_id)
         except ValueError:

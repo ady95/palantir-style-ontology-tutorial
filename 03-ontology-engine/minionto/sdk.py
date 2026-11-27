@@ -211,6 +211,10 @@ class RemoteOntology:
     def metadata(self) -> dict:
         return self.get("")
 
+    def me(self) -> Record:
+        """이 토큰의 실행자·범위·적용되는 정책 (21장)"""
+        return Record(self.metadata()["you"])
+
     def check_version(self) -> str:
         """생성된 SDK 와 서버 버전 비교. 주 버전이 다르면(호환 깨짐) 오류"""
         server = self.metadata()["version"]

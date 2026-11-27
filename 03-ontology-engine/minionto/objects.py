@@ -85,6 +85,14 @@ class OntologyClient:
         return self._functions
 
     @property
+    def policy(self):
+        """Policy Engine (21장) — 행·속성 정책과 판단 기록"""
+        if getattr(self, "_policy", None) is None:
+            from .policy import PolicyEngine
+            self._policy = PolicyEngine(self)
+        return self._policy
+
+    @property
     def actions(self):
         """Action Engine — client.actions.apply("request_missing_documents", "R00024", actor=...)"""
         if getattr(self, "_actions", None) is None:
@@ -99,9 +107,11 @@ class OntologyClient:
                              f"(있는 타입: {', '.join(self.onto.object_types)})")
         return ObjectSet(self, object_type)
 
-    def get(self, object_type: str, pk: Any) -> OntoObject | None:
+    def get(self, object_type: str, pk: Any, actor: dict | None = None) -> OntoObject | None:
+        """actor 를 주면 그 실행자에게 보이는 범위에서 찾는다 (21장)"""
         ot = self.onto.object_types[object_type]
-        return self.objects(object_type).where(**{ot.source.primary_key: pk}).first()
+        q = self.objects(object_type).where(**{ot.source.primary_key: pk})
+        return (q.secure(actor) if actor else q).first()
 
     def bindings(self, params: dict | None = None, actor: dict | None = None) -> Bindings:
         return Bindings(actor=actor if actor is not None else self.actor, params=params or {},
@@ -136,7 +146,7 @@ class ObjectSet:
 
     def __init__(self, client: OntologyClient, object_type: str, conditions: tuple[Condition, ...] = (),
                  order: tuple[tuple[str, bool], ...] = (), limit_: int | None = None, offset_: int = 0,
-                 params: dict | None = None, actor: dict | None = None):
+                 params: dict | None = None, actor: dict | None = None, viewer: dict | None = None):
         self.client = client
         self.object_type = object_type
         self.conditions = conditions
@@ -145,10 +155,11 @@ class ObjectSet:
         self._offset = offset_
         self.params = params or {}
         self.actor = actor                      # None 이면 client.actor
+        self.viewer = viewer                    # 21장: 이 실행자의 권한 정책으로 제한된 집합
 
     def _copy(self, **kw) -> ObjectSet:
         base = dict(conditions=self.conditions, order=self.order, limit_=self._limit,
-                    offset_=self._offset, params=self.params, actor=self.actor)
+                    offset_=self._offset, params=self.params, actor=self.actor, viewer=self.viewer)
         base.update(kw)
         return ObjectSet(self.client, self.object_type, **base)
 
@@ -165,8 +176,13 @@ class ObjectSet:
         return self._copy(params={**self.params, **params})
 
     def as_actor(self, actor: dict) -> ObjectSet:
-        """조건식 안의 $actor.* 값을 정한다 (Action 실행자)"""
+        """조건식 안의 $actor.* 값을 정한다 (Action 실행자). 권한 정책은 적용하지 않는다"""
         return self._copy(actor=actor)
+
+    def secure(self, actor: dict) -> ObjectSet:
+        """이 실행자에게 보이는 범위로 제한한다 (21장): 행 정책 조건을 덧붙이고, 감춘 속성은 결과에서
+        빼며, 감춘 속성을 조건·정렬·선택에 쓰면 거부한다. 링크를 따라가도(pivot) 유지된다."""
+        return self._copy(actor=actor, viewer=actor)
 
     def pivot(self, link: str) -> ObjectSet:
         """링크로 이어진 객체 집합으로 이동 (Search Around)
@@ -183,9 +199,13 @@ class ObjectSet:
             raise QueryError(f"'{self.object_type}' 에 '{link}' 링크가 없습니다 "
                              f"(있는 링크: {', '.join(schema.links[self.object_type]) or '없음'})")
         back = reverse_end(schema, end)
-        where = Condition(all_=list(self.conditions)) if self.conditions else None
+        conds = list(self.conditions)
+        if self.viewer:                         # 출발 집합도 보이는 범위로 (보이는 고객의 담당자만)
+            conds += [c for _, c in self.client.policy.row_rules(self.object_type, self.viewer)]
+        where = Condition(all_=conds) if conds else None
         cond = Condition(some=LinkQuantifier(link=back.name, where=where))
-        return ObjectSet(self.client, end.target, (cond,), params=self.params, actor=self.actor)
+        return ObjectSet(self.client, end.target, (cond,), params=self.params, actor=self.actor,
+                         viewer=self.viewer)
 
     def order_by(self, *paths: str) -> ObjectSet:
         """정렬. '-due_date' 처럼 앞에 - 를 붙이면 내림차순. 단일 값 경로만 가능"""
@@ -206,9 +226,26 @@ class ObjectSet:
         scope = comp.scope(self.object_type)
         ot = self.client.onto.object_types[self.object_type]
 
+        conditions, hidden = list(self.conditions), {}
+        if self.viewer:                         # 21장: 권한 정책 집행
+            pol, v, t = self.client.policy, self.viewer, self.object_type
+            for c in self.conditions:
+                pol.check_condition(t, c, v)
+            for path, _ in self.order:
+                pol.check_path(t, path, v, "정렬")
+            for path, _ in select or []:
+                pol.check_path(t, path, v, "선택")
+            for path in group or []:
+                pol.check_path(t, path, v, "그룹")
+            for _, _, path in aggregates or []:
+                if path:
+                    pol.check_path(t, path, v, "집계")
+            conditions += [c for _, c in pol.row_rules(t, v)]
+            hidden = pol.hidden(t, v)
+
         cols: list[sql.Composable] = []
         if select is None and group is None:
-            select = [(p, p) for p in ot.properties]
+            select = [(p, p) for p in ot.properties if p not in hidden]
         for path, alias in select or []:
             col, _ = scope.column(path)
             cols.append(sql.SQL("{} AS {}").format(col, sql.Identifier(alias)))
@@ -221,7 +258,7 @@ class ObjectSet:
             arg = sql.SQL("*") if path is None else scope.column(path)[0]
             cols.append(sql.SQL("{}({}) AS {}").format(sql.SQL(fn.upper()), arg, sql.Identifier(alias)))
 
-        where = [comp.condition(c, scope) for c in self.conditions]
+        where = [comp.condition(c, scope) for c in conditions]
         order = []
         for path, desc in self.order:
             col, prop = scope.column(path)
@@ -254,7 +291,13 @@ class ObjectSet:
     # ------------------------------------------------------------------ 실행
     def all(self) -> list[OntoObject]:
         rows = self.client.fetch(self._compile())
-        return [OntoObject(self.client, self.object_type, r) for r in rows]
+        hidden = frozenset(self.client.policy.hidden(self.object_type, self.viewer)) if self.viewer else frozenset()
+        self._audit(len(rows), hidden, "all")
+        return [OntoObject(self.client, self.object_type, r, restricted=hidden, viewer=self.viewer) for r in rows]
+
+    def _audit(self, n: int, hidden, how: str) -> None:
+        if self.viewer:
+            self.client.policy.log_read(self.viewer, self.object_type, n, list(hidden), how)
 
     def __iter__(self) -> Iterator[OntoObject]:
         return iter(self.all())
@@ -279,13 +322,16 @@ class ObjectSet:
 
     def rows(self, *paths: str) -> list[dict]:
         """표 형태 조회. 링크를 거친 속성도 가능: rows("period", "customer.company_name")"""
-        return self.client.fetch(self._compile(select=[(p, p) for p in paths]))
+        rows = self.client.fetch(self._compile(select=[(p, p) for p in paths]))
+        self._audit(len(rows), (), "rows")
+        return rows
 
     def count_by(self, *paths: str) -> list[dict]:
         """그룹별 개수. 예: count_by("customer.accountant.name")"""
         q = self._copy(order=())._compile(group=list(paths), aggregates=[("count", "count", None)],
                                           paged=False)
         rows = self.client.fetch(q)
+        self._audit(len(rows), (), "count_by")
         return sorted(rows, key=lambda r: (-r["count"], *(str(r[p]) for p in paths)))
 
     def aggregate(self, **specs: tuple[str, str] | str) -> dict:
@@ -319,12 +365,15 @@ class OntoObject:
     """
     RESERVED = frozenset(RESERVED_NAMES)
 
-    __slots__ = ("_client", "object_type", "properties")
+    __slots__ = ("_client", "object_type", "properties", "restricted", "_viewer")
 
-    def __init__(self, client: OntologyClient, object_type: str, properties: dict[str, Any]):
+    def __init__(self, client: OntologyClient, object_type: str, properties: dict[str, Any], *,
+                 restricted: frozenset = frozenset(), viewer: dict | None = None):
         self._client = client
         self.object_type = object_type
         self.properties = properties
+        self.restricted = restricted            # 21장: 이 실행자에게 감춘 속성
+        self._viewer = viewer
 
     @property
     def _def(self):
@@ -342,13 +391,17 @@ class OntoObject:
     def link(self, name: str) -> ObjectSet:
         """링크 이름으로 이어진 객체 집합 (단일·여러 값 모두 ObjectSet)"""
         pk_name = self._def.source.primary_key
-        return self._client.objects(self.object_type).where(**{pk_name: self.pk}).pivot(name)
+        q = self._client.objects(self.object_type).where(**{pk_name: self.pk})
+        return (q.secure(self._viewer) if self._viewer else q).pivot(name)
 
     def __getattr__(self, name: str) -> Any:
         if name.startswith("_"):
             raise AttributeError(name)
         if name in self.properties:
             return self.properties[name]
+        if name in self.restricted:
+            from .policy import PolicyError
+            raise PolicyError(f"{self.object_type}.{name} 은 이 실행자에게 감춘 속성입니다")
         end = self._client.schema.links[self.object_type].get(name)
         if end is None:
             raise AttributeError(f"'{self.object_type}' 에 '{name}' 속성이나 링크가 없습니다")

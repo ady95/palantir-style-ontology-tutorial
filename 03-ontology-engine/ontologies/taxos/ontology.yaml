@@ -6,7 +6,7 @@
 
 ontology:
   name: taxos
-  version: 0.2.0
+  version: 0.3.0
   display_name: 세무 사무소 운영 온톨로지
   description: 고객·신고·필수 자료·업무를 객체로 정의하고, 자료 요청·담당자 배정 같은 업무를 Action으로 실행한다.
 
@@ -14,6 +14,30 @@ datasource:
   url_env: TAXOS_DATABASE_URL
 
 roles: [세무사, 실무자, AI비서]
+
+# ---------------------------------------------------------------------------
+# Security (21장): 누가 어떤 객체·속성을 볼 수 있는가. 볼 수 없는 객체에는 Action 도 실행할 수 없다.
+# ---------------------------------------------------------------------------
+security:
+  row_policies:
+    own_customers:
+      description: 실무자는 본인 담당 고객과 그 고객의 신고·자료·업무·상담·위험 이벤트만 다룬다
+      roles: [실무자]
+      rules:
+        Customer:           { field: accountant_id, op: eq, value: $actor.id }
+        TaxReturn:          { field: customer.accountant_id, op: eq, value: $actor.id }
+        DocumentSubmission: { field: tax_return.customer.accountant_id, op: eq, value: $actor.id }
+        Task:               { field: customer.accountant_id, op: eq, value: $actor.id }
+        Consultation:       { field: customer.accountant_id, op: eq, value: $actor.id }
+        RiskEvent:          { field: customer.accountant_id, op: eq, value: $actor.id }
+  property_policies:
+    personal_info:
+      description: AI 에이전트는 고객·담당자의 개인 식별 정보(대표자, 전화, 사업자등록번호, 이메일)를 보지 않는다
+      actor_types: [agent]
+      hidden:
+        Customer:   [representative, phone, business_reg_no]
+        Accountant: [email]
+  audit_reads: [agent]          # AI 에이전트가 무엇을 조회했는지 남긴다
 
 # ---------------------------------------------------------------------------
 # Interface: 여러 객체 타입이 공유하는 형태
@@ -263,12 +287,8 @@ actions:
               all:
                 - { field: task_type, op: eq, value: 자료요청 }
                 - { field: status, op: in, value: [대기, 진행중] }
-    permission:
+    permission:                          # '실무자는 본인 담당 고객만'은 행 정책(own_customers)이 맡는다 (21장)
       roles: [세무사, 실무자, AI비서]
-      check:
-        any:
-          - { field: $actor.role, op: in, value: [세무사, AI비서] }
-          - { field: customer.accountant_id, op: eq, value: $actor.id }
     approval:
       required_if:
         all:
@@ -276,6 +296,7 @@ actions:
           - { field: $actor.type, op: eq, value: agent }
       approver_roles: [세무사]
       reason: 고위험 고객에 대한 AI의 자료 요청은 세무사 승인 후 실행한다.
+      expires_in: 24h                    # 기한 안에 처리하지 않으면 만료 (21장)
     edits:
       - update_linked: submissions
         where: { field: status, op: eq, value: 미요청 }
@@ -369,10 +390,6 @@ actions:
     permission:
       roles: [세무사, 실무자]
       actor_types: [human]
-      check:
-        any:
-          - { field: $actor.role, op: eq, value: 세무사 }
-          - { field: tax_return.customer.accountant_id, op: eq, value: $actor.id }
     edits:
       - update: target
         set: { status: 제출완료, submitted_at: $today }
@@ -387,10 +404,6 @@ actions:
         check: { none: { link: submissions, where: { field: status, op: in, value: [미요청, 요청됨] } } }
     permission:
       roles: [세무사, 실무자, AI비서]
-      check:
-        any:
-          - { field: $actor.role, op: in, value: [세무사, AI비서] }
-          - { field: customer.accountant_id, op: eq, value: $actor.id }
     edits:
       - update: target
         set: { status: 검토중 }

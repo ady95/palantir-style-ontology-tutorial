@@ -127,6 +127,22 @@ class FunctionEngine:
         self.check_output(fn_def.returns, result, f"{name} 반환값")
         return result
 
+    def call_as(self, actor: dict, name: str, **args: Any) -> Any:
+        """실행자의 권한 정책을 적용한 호출 (21장)
+
+        Function 은 계산을 위해 전체 데이터를 본다. 대신 입력으로 넘긴 객체는 실행자에게 보여야 하고,
+        결과에 섞인 객체에서는 실행자에게 감춘 속성을 뺀다.
+        """
+        fn_def, _ = self.implementation(name)
+        policy = self.client.policy
+        for pname, param in fn_def.inputs.items():
+            value = args.get(pname)
+            if value is None or param.type not in ("object", "list") or not param.object_type:
+                continue
+            for v in (value if param.type == "list" else [value]):
+                policy.require_visible(param.object_type, getattr(v, "pk", v), actor, f"Function {name}")
+        return policy.redact(self.call(name, **args), actor)
+
     # ------------------------------------------------------------------ 입력 변환·출력 검사
     def to_input(self, param: Parameter, value: Any, where: str) -> Any:
         from .objects import OntoObject

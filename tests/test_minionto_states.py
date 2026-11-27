@@ -169,9 +169,10 @@ def test_expect_detects_stale_read(tx):
 def test_concurrent_change_is_detected():
     """링크 객체(자료)를 다른 트랜잭션이 먼저 바꾸면, 변경 직전의 재확인에서 잡는다"""
     c1, c2 = _open(), _open()
-    ret = c1.actions.candidates("request_missing_documents", actor=AI).where(
-        {"field": "customer.risk_level", "op": "ne", "value": "높음"}).order_by("return_id").first().pk
-    sub = c1.get("TaxReturn", ret).submissions.where(status="미요청").order_by("submission_id").first()
+    with c1.conn.transaction(force_rollback=True):        # AI 의 조회 기록(21장)도 남기지 않는다
+        ret = c1.actions.candidates("request_missing_documents", actor=AI).where(
+            {"field": "customer.risk_level", "op": "ne", "value": "높음"}).order_by("return_id").first().pk
+        sub = c1.get("TaxReturn", ret).submissions.where(status="미요청").order_by("submission_id").first()
     original = c2.conn.execute("SELECT status, submitted_at FROM document_submissions WHERE submission_id=%s",
                                (sub.pk,)).fetchone()
     result = {}

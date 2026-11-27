@@ -102,6 +102,20 @@
           ],
           "default": null,
           "title": "Reason"
+        },
+        "expires_in": {
+          "anyOf": [
+            {
+              "pattern": "^[1-9][0-9]*[mhd]$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "승인 기한 (예: 30m, 24h, 3d). 지나면 만료 (21장)",
+          "title": "Expires In"
         }
       },
       "required": [
@@ -933,6 +947,127 @@
       "title": "Property",
       "type": "object"
     },
+    "PropertyPolicy": {
+      "additionalProperties": false,
+      "description": "속성 단위 정책: 이 실행자에게 감출 속성. 결과에서 빠지고 조건·정렬에도 쓸 수 없다",
+      "properties": {
+        "roles": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Roles"
+        },
+        "actor_types": {
+          "anyOf": [
+            {
+              "items": {
+                "enum": [
+                  "human",
+                  "agent",
+                  "system"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor Types"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "hidden": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "description": "객체 타입 → 감출 속성 목록",
+          "title": "Hidden",
+          "type": "object"
+        }
+      },
+      "required": [
+        "description",
+        "hidden"
+      ],
+      "title": "PropertyPolicy",
+      "type": "object"
+    },
+    "RowPolicy": {
+      "additionalProperties": false,
+      "description": "행 단위 정책: 객체 타입마다 '이 실행자에게 보이는 객체' 조건. 보이지 않는 객체는 조회도 실행도 못 한다",
+      "properties": {
+        "roles": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Roles"
+        },
+        "actor_types": {
+          "anyOf": [
+            {
+              "items": {
+                "enum": [
+                  "human",
+                  "agent",
+                  "system"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor Types"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "rules": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Condition"
+          },
+          "description": "객체 타입 → 보이는 조건 ($actor.* 참조 가능)",
+          "title": "Rules",
+          "type": "object"
+        }
+      },
+      "required": [
+        "description",
+        "rules"
+      ],
+      "title": "RowPolicy",
+      "type": "object"
+    },
     "Rule": {
       "additionalProperties": false,
       "properties": {
@@ -950,6 +1085,40 @@
         "check"
       ],
       "title": "Rule",
+      "type": "object"
+    },
+    "Security": {
+      "additionalProperties": false,
+      "properties": {
+        "row_policies": {
+          "additionalProperties": {
+            "$ref": "#/$defs/RowPolicy"
+          },
+          "title": "Row Policies",
+          "type": "object"
+        },
+        "property_policies": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PropertyPolicy"
+          },
+          "title": "Property Policies",
+          "type": "object"
+        },
+        "audit_reads": {
+          "description": "조회 기록을 남길 실행자 유형 (예: [agent])",
+          "items": {
+            "enum": [
+              "human",
+              "agent",
+              "system"
+            ],
+            "type": "string"
+          },
+          "title": "Audit Reads",
+          "type": "array"
+        }
+      },
+      "title": "Security",
       "type": "object"
     },
     "Source": {
@@ -1137,6 +1306,9 @@
       },
       "title": "Actions",
       "type": "object"
+    },
+    "security": {
+      "$ref": "#/$defs/Security"
     }
   },
   "required": [

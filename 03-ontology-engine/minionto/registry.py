@@ -215,6 +215,19 @@ def diff(old: Ontology, new: Ontology) -> list[Change]:
 
     for role in sorted(set(old.roles) - set(new.roles)):
         ch.append(Change("policy", "roles", f"역할 삭제: {role}"))
+
+    # ---- 보안 정책 (21장): 누가 무엇을 볼 수 있는가가 바뀐다 → 검토 대상
+    for kind in ("row_policies", "property_policies"):
+        o, n = getattr(old.security, kind), getattr(new.security, kind)
+        for name in sorted(n.keys() - o.keys()):
+            ch.append(Change("policy", f"security.{kind}.{name}", "보안 정책 추가"))
+        for name in sorted(o.keys() - n.keys()):
+            ch.append(Change("policy", f"security.{kind}.{name}", "보안 정책 삭제"))
+        for name in sorted(o.keys() & n.keys()):
+            if _dump(o[name]) != _dump(n[name]):
+                ch.append(Change("policy", f"security.{kind}.{name}", "보안 정책 변경"))
+    if old.security.audit_reads != new.security.audit_reads:
+        ch.append(Change("policy", "security.audit_reads", "조회 기록 대상 변경"))
     return sorted(ch, key=lambda c: (LEVELS.index(c.level), c.path))
 
 

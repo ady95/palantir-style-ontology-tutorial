@@ -236,6 +236,8 @@ class Approval(Strict):
     required_if: Condition
     approver_roles: list[str]
     reason: str | None = None
+    expires_in: str | None = Field(None, pattern=r"^[1-9][0-9]*[mhd]$",
+                                   description="승인 기한 (예: 30m, 24h, 3d). 지나면 만료 (21장)")
 
 
 class Edit(Strict):
@@ -281,6 +283,41 @@ class Action(Strict):
 
 
 # ---------------------------------------------------------------------------
+# Security: 행·속성 단위 정책 (21장)
+# ---------------------------------------------------------------------------
+
+class PolicyTarget(Strict):
+    """정책이 적용되는 실행자. roles·actor_types 중 적은 것을 모두 만족하면 적용된다"""
+    roles: list[str] | None = None
+    actor_types: list[Literal["human", "agent", "system"]] | None = None
+
+    @model_validator(mode="after")
+    def _some(self):
+        if not self.roles and not self.actor_types:
+            raise ValueError("정책에는 roles 또는 actor_types 가 필요합니다")
+        return self
+
+
+class RowPolicy(PolicyTarget):
+    """행 단위 정책: 객체 타입마다 '이 실행자에게 보이는 객체' 조건. 보이지 않는 객체는 조회도 실행도 못 한다"""
+    description: str
+    rules: dict[str, Condition] = Field(description="객체 타입 → 보이는 조건 ($actor.* 참조 가능)")
+
+
+class PropertyPolicy(PolicyTarget):
+    """속성 단위 정책: 이 실행자에게 감출 속성. 결과에서 빠지고 조건·정렬에도 쓸 수 없다"""
+    description: str
+    hidden: dict[str, list[str]] = Field(description="객체 타입 → 감출 속성 목록")
+
+
+class Security(Strict):
+    row_policies: dict[str, RowPolicy] = Field(default_factory=dict)
+    property_policies: dict[str, PropertyPolicy] = Field(default_factory=dict)
+    audit_reads: list[Literal["human", "agent", "system"]] = Field(
+        default_factory=list, description="조회 기록을 남길 실행자 유형 (예: [agent])")
+
+
+# ---------------------------------------------------------------------------
 # 최상위
 # ---------------------------------------------------------------------------
 
@@ -304,6 +341,7 @@ class Ontology(Strict):
     link_types: dict[str, LinkType] = Field(default_factory=dict)
     functions: dict[str, Function] = Field(default_factory=dict)
     actions: dict[str, Action] = Field(default_factory=dict)
+    security: Security = Field(default_factory=Security)
 
 
 LinkQuantifier.model_rebuild()

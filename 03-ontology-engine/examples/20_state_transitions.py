@@ -101,8 +101,9 @@ def scenario(onto: OntologyClient) -> str:
 def concurrent_change() -> None:
     section("6. 동시 변경 — 다른 트랜잭션이 먼저 바꾼 자료")
     c1, c2 = OntologyClient.open(TAXOS, today=AS_OF), OntologyClient.open(TAXOS, today=AS_OF)
-    ret = pick_return(c1)
-    sub = c1.get("TaxReturn", ret).submissions.where(status="미요청").order_by("submission_id").first()
+    with c1.conn.transaction(force_rollback=True):        # AI 의 조회 기록(21장)도 남기지 않는다
+        ret = pick_return(c1)
+        sub = c1.get("TaxReturn", ret).submissions.where(status="미요청").order_by("submission_id").first()
     original = c2.conn.execute("SELECT status, submitted_at FROM document_submissions WHERE submission_id = %s",
                                (sub.pk,)).fetchone()
     out = {}

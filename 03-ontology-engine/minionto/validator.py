@@ -6,6 +6,7 @@
 - enum 속성에 허용되지 않은 값을 쓰지 않았는가
 - Action 이 새 객체를 만들 때 필수 속성을 모두 채우는가
 - 상태 머신(20장)과 Action 의 edits 가 서로 맞는가
+- 보안 정책(21장)이 가리키는 역할·객체 타입·속성이 있고, 조건은 $actor 만 참조하는가
 """
 
 from __future__ import annotations
@@ -72,6 +73,7 @@ class Validator:
         for name, action in self.onto.actions.items():
             self._action(f"actions.{name}", action)
         self._state_machines()
+        self._security()
         return self.r
 
     # ------------------------------------------------------------------ Object Type
@@ -229,6 +231,38 @@ class Validator:
             if key == ot.source.primary_key and not allow_pk:
                 self.r.error(f"{p}.{key}", "기본키는 수정할 수 없습니다")
             self._value(f"{p}.{key}", value, prop, action)
+
+    # ------------------------------------------------------------------ 보안 정책 (21장)
+    def _security(self) -> None:
+        sec = self.onto.security
+        roles = set(self.onto.roles)
+        policies = [(f"security.row_policies.{n}", pol) for n, pol in sec.row_policies.items()] + \
+                   [(f"security.property_policies.{n}", pol) for n, pol in sec.property_policies.items()]
+        for p, pol in policies:
+            for role in pol.roles or []:
+                if role not in roles:
+                    self.r.error(f"{p}.roles", f"역할 '{role}' 이 roles 에 없습니다")
+        for name, pol in sec.row_policies.items():
+            p = f"security.row_policies.{name}.rules"
+            for otype, cond in pol.rules.items():
+                if otype not in self.onto.object_types:
+                    self.r.error(f"{p}.{otype}", f"객체 타입 '{otype}' 이 없습니다")
+                    continue
+                self._condition(f"{p}.{otype}", cond, otype, None)
+        for name, pol in sec.property_policies.items():
+            p = f"security.property_policies.{name}.hidden"
+            for otype, props in pol.hidden.items():
+                ot = self.onto.object_types.get(otype)
+                if ot is None:
+                    self.r.error(f"{p}.{otype}", f"객체 타입 '{otype}' 이 없습니다")
+                    continue
+                for prop in props:
+                    if prop not in ot.properties:
+                        self.r.error(f"{p}.{otype}", f"'{otype}' 에 속성 '{prop}' 이 없습니다")
+                    elif prop == ot.source.primary_key:
+                        self.r.error(f"{p}.{otype}", f"기본키 '{prop}' 는 감출 수 없습니다 (객체를 구별할 수 없게 됨)")
+                    elif prop == ot.title_property:
+                        self.r.warning(f"{p}.{otype}", f"'{prop}' 은 title_property 라 객체 이름(label)으로 드러납니다")
 
     # ------------------------------------------------------------------ 상태 머신 (20장)
     def _state_machines(self) -> None:
@@ -391,12 +425,15 @@ class Validator:
         elif prop.type == "boolean" and not isinstance(value, bool):
             self.r.error(p, f"true/false 가 필요합니다: {value!r}")
 
-    def _ref(self, p: str, value: Any, action: Action) -> None:
+    def _ref(self, p: str, value: Any, action: Action | None) -> None:
         if not (isinstance(value, str) and value.startswith("$")):
             return
         if value in SPECIAL_REFS:
             return
         head, _, rest = value[1:].partition(".")
+        if action is None and head in ("params", "target"):     # 보안 정책의 조건
+            self.r.error(p, f"'{value}': 정책 조건에는 $actor·$today·$now 만 쓸 수 있습니다")
+            return
         if head == "actor":
             if rest not in ACTOR_FIELDS:
                 self.r.error(p, f"'{value}': $actor 에는 {', '.join(sorted(ACTOR_FIELDS))} 만 있습니다")
@@ -416,7 +453,7 @@ class Validator:
 
     def _param_as_property(self, ref: str, action: Action) -> Property | None:
         """$params.x 가 enum 이면 값 검사를 위해 Property 처럼 다룬다."""
-        if not ref.startswith("$params."):
+        if action is None or not ref.startswith("$params."):
             return None
         param = action.parameters.get(ref.split(".")[1])
         if param and param.type == "enum":

@@ -30,7 +30,7 @@ def _ident(name: str) -> str:
 # RemoteOntology 의 메서드·속성과 겹치는 Function·Action 이름은 뒤에 _ 를 붙인다
 CLIENT_RESERVED = {"get", "post", "call", "apply", "objects", "metadata", "close", "candidates", "approvals",
                    "decide", "linked", "get_object", "check_version", "link_target", "http", "prefix", "name",
-                   "available", "history",
+                   "available", "history", "me",
                    "ontology", "version", "models", "link_targets"}
 
 

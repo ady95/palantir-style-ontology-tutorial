@@ -14,10 +14,15 @@
 | 18 | Function Engine · Action Engine (계산·검증된 실행·승인·감사) | ✅ v0.1 |
 | 19 | Ontology Registry · API · SDK (버전 관리·REST API·타입 SDK 생성) | ✅ v0.1 |
 | 20 | 상태 머신 · 상태 전이 강제 · 동시 변경 감지 · 지금 가능한 Action 조회 | ✅ v0.1 |
+| 21 | 토큰 인증(JWT·scope) · 행·속성 권한 정책 · 정책 판단 기록 · 승인 기한·미리보기·알림 | ✅ v0.1 |
 
-> 20장에서 세무 정의(taxos)를 v0.2.0 으로 올렸습니다(상태 머신과 Action 4개 추가).
-> 15~19장 원고의 출력(체크섬·줄 수·Action 목록 등)은 v0.1.0 기준이며, 그 상태는 태그 `part4` 로 볼 수 있습니다.
-> `git checkout part4`
+> 세무 정의(taxos)는 장이 진행되며 버전이 오릅니다. 각 장 원고의 출력은 그 장의 태그 기준입니다.
+>
+> | 태그 | 원고 | taxos |
+> |---|---|---|
+> | `part4` | 15~19장 | v0.1.0 |
+> | `ch20` | 20장 | v0.2.0 (상태 머신, Action 4개 추가) |
+> | `main` | 21장~ | v0.3.0 (보안 정책, 승인 기한) |
 
 ## 구조
 
@@ -38,15 +43,18 @@
 │   ├── sdk.py                # 원격 클라이언트 (httpx 만 사용, 로컬 ObjectSet 과 같은 모양)    [19장]
 │   ├── codegen.py            # SDK Generator: 메타데이터 → 타입 있는 Python SDK               [19장]
 │   ├── states.py             # 상태 머신: 전이 규칙 조회, Mermaid 다이어그램                   [20장]
+│   ├── auth.py               # 인증: JWT 발급·검증(JwtAuth), 개발용 키(ApiKeyAuth), scope        [21장]
+│   ├── policy.py             # 권한 정책: 행·속성 정책 집행, 판단 기록                         [21장]
 │   ├── loader.py, cli.py
 ├── examples/17_object_link_engine.py   # PART 2 SPARQL 질문을 엔진으로 다시 풀기
 ├── examples/17_compare_sparql.py       # SPARQL(RDF 그래프)과 엔진(운영 DB)의 결과 ID 집합 대조
 ├── examples/18_function_action_engine.py  # Action 실행·거부·승인 시나리오 (기본은 롤백)
 ├── examples/19_registry_api_sdk.py        # 등록→활성화 관문→API→생성 SDK (기본은 롤백)
 ├── examples/20_state_transitions.py       # 지금 가능한 Action → 신고 업무 상태 전이 → 동시 변경 감지
+├── examples/21_security_hitl.py           # 토큰 인증 → 역할별 조회 → 정책 위반 차단 → 승인 워크플로
 ├── examples/dev_api_keys.yaml             # 개발용 API 키 (토큰 → 실행자)
 ├── ontologies/               # 도메인 정의 (엔진 코드 수정 없이 교체)
-│   ├── taxos/ontology.yaml       # 세무 v0.2.0: Object 8 · Link 10 · Function 4 · Action 8 · 상태 머신 3
+│   ├── taxos/ontology.yaml       # 세무 v0.3.0: Object 8 · Link 10 · Function 4 · Action 8 · 상태 머신 3 · 정책 2
 │   ├── taxos/functions.py        # Function 구현 (계산만, 테이블 이름 없음)
 │   └── northwind/ontology.yaml   # 주문·재고: Object 7 · Link 7 · Function 2
 └── schema/minionto.schema.json   # 에디터 자동완성용 JSON Schema
@@ -437,6 +445,50 @@ uv run python examples/20_state_transitions.py
 API: `GET .../objects/{type}/{pk}/actions`, `GET .../objects/{type}/{pk}/history`, apply 요청의 `expect`.
 SDK: `sdk.available()`, `sdk.history()`, Action 메서드의 `expect=` 인자, 독스트링의 상태 전이.
 
+## 인증 · 권한 정책 · 승인 워크플로 (21장)
+
+```yaml
+security:
+  row_policies:                     # 행: 이 실행자에게 보이는 객체 (보이지 않으면 Action 도 불가)
+    own_customers:
+      description: 실무자는 본인 담당 고객과 그 고객의 신고·자료·업무·상담·위험 이벤트만 다룬다
+      roles: [실무자]
+      rules:
+        Customer:  { field: accountant_id, op: eq, value: $actor.id }
+        TaxReturn: { field: customer.accountant_id, op: eq, value: $actor.id }
+        ...
+  property_policies:                # 속성: 결과에서 빠지고, 조건·정렬·선택에 쓰면 거부
+    personal_info:
+      description: AI 에이전트는 고객·담당자의 개인 식별 정보를 보지 않는다
+      actor_types: [agent]
+      hidden: { Customer: [representative, phone, business_reg_no], Accountant: [email] }
+  audit_reads: [agent]              # AI 에이전트의 조회를 기록
+```
+
+```python
+onto.objects("Customer").secure(actor)          # 실행자에게 보이는 범위 (as_actor 는 $actor 값만 정함)
+onto.get("Customer", "C0001", actor=actor)      # 보이지 않으면 None
+onto.functions.call_as(actor, "recommend_assignee", customer="C0001")   # 입력은 보여야, 출력은 가림
+onto.policy.decisions()                         # 정책 판단 기록 (거부, AI 조회)
+onto.actions.pending_approvals()                # 기한(expires_at)·변경 미리보기(preview) 포함
+onto.actions.expire_stale()                     # 기한 지난 승인 요청 만료 (스케줄러)
+```
+
+- 인증: `JwtAuth` 가 서명(HS256)·만료·발급자·대상을 확인하고 토큰의 sub·role·actor_type·scope 로 실행자를 정한다.
+  서명 키는 `.env` 의 `MINIONTO_TOKEN_SECRET` (32바이트 이상). scope: `objects:read` `functions:call` `actions:apply` `approvals:decide`
+- 승인: 요청할 때 edits 를 실행·롤백해 미리보기를 저장하고, `approval_requested` 이벤트를 outbox 에 남긴다.
+  승인 시 기한을 확인하고, 실제 변경이 미리보기와 다르면 실행하지 않고 만료로 닫는다.
+
+```bash
+uv run python -m minionto token issue --sub agent-01 --role AI비서 --type agent --scope objects:read,actions:apply --ttl 1h
+uv run python -m minionto serve ontologies/taxos/ontology.yaml --auth jwt --today 2027-01-18
+uv run python -m minionto query ontologies/taxos/ontology.yaml Customer --as A003,실무자,human
+uv run python -m minionto approvals list ontologies/taxos/ontology.yaml
+uv run python -m minionto approvals expire ontologies/taxos/ontology.yaml
+uv run python -m minionto decisions ontologies/taxos/ontology.yaml
+uv run python examples/21_security_hitl.py
+```
+
 ## v0.1의 제약 (의도적으로 단순화)
 
 | 제약 | 영향 | 대안 |
@@ -447,12 +499,14 @@ SDK: `sdk.available()`, `sdk.history()`, Action 메서드의 `expect=` 인자, �
 | 조건식은 비교·논리·수량·함수만 | 산술식(예: `재고 + 입고예정 <= 기준`)을 직접 쓰지 못함 | Function으로 분리 (`is_low_stock`) |
 | 링크 개수와 속성 비교 불가 | "담당 고객 수 > max_workload" 를 조건식으로 못 씀 | `count_by` 후 판단, 또는 Function (`has_capacity`) |
 | 객체 링크 접근은 매번 질의 | `for r in returns: r.customer` 는 N+1 질의 | 표가 필요하면 `rows("customer.company_name")` 로 한 번에 |
-| 승인 요청에 만료 시간이 없음 | 오래된 요청이 남음 | 21장 승인 워크플로에서 기한·알림 추가 |
+| 승인 알림은 outbox 이벤트까지만 | 메일·메신저로 실제 발송하지 않음 | 23장 아웃박스 발송기 |
 | 상태 전이 외의 변경 이력(before)은 action_log 에만 | 객체별 속성 이력 조회가 불편 | 24장 감사 로그에서 객체 이력 뷰 |
 | 상태 머신은 enum 속성 하나, 전이 조건은 Action 의 실행 조건으로 | 병렬 상태(예: 신고 상태 × 납부 상태)는 따로 선언 | 속성마다 별도 객체로 나누거나 이후 확장 |
 | SQL 로 DB 를 직접 바꾸면 상태 머신을 거치지 않음 | 엔진 밖 변경은 막지 못함 (다음 Action 에서 동시 변경으로 감지될 뿐) | DB 트리거로 전이 표를 강제하거나 쓰기 권한을 엔진 계정으로 제한 |
 | `pk`·`label` 등은 예약 이름 | 같은 이름의 속성은 `obj["pk"]` 로 읽음 | 검증기가 경고 |
-| API 키는 개발용 고정 파일 | 키 회전·만료·권한 범위 없음 | 21장 인증·정책 엔진 |
+| 토큰은 공유 비밀키(HS256)로 직접 발급 | 키가 새면 모든 토큰을 위조할 수 있음, 토큰 폐기 목록 없음 | 사내 인증 서버(OIDC)의 RS256 서명 + JWKS 검증 |
+| 행 정책은 결과 타입에만 적용 | 링크 경로 조건(some/none)으로 범위 밖 객체의 존재를 추론할 여지 | 경로마다 정책 적용, 집계 최소 건수 |
+| 개수 조회(count)는 조회 기록에 남기지 않음 | AI 가 집계로 얻은 정보는 기록되지 않음 | 집계 기록 추가 |
 | API 는 요청마다 DB 연결을 새로 엶 | 동시 요청이 많으면 연결 비용 | 커넥션 풀(psycopg_pool) |
 | Registry 는 활성 버전 하나만 서빙 | 버전별 API 동시 제공(`/v1`, `/v2`) 불가 | 서버 재시작으로 전환, 이후 버전 라우팅 |
 | Registry 활성화는 서버를 다시 띄워야 반영 | 실행 중 정의 교체 없음 | 활성화 이벤트 구독 후 재적재 |

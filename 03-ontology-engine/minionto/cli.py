@@ -8,6 +8,11 @@
   python -m minionto states ontologies/taxos/ontology.yaml TaxReturn [--mermaid]
   python -m minionto available ontologies/taxos/ontology.yaml TaxReturn R00006 --actor agent-01,AI비서,agent
   python -m minionto history ontologies/taxos/ontology.yaml TaxReturn R00006
+  python -m minionto token issue --sub agent-01 --role AI비서 --type agent --scope objects:read,actions:apply --ttl 1h
+  python -m minionto serve ontologies/taxos/ontology.yaml --auth jwt
+  python -m minionto query ontologies/taxos/ontology.yaml Customer --as A003,실무자,human
+  python -m minionto approvals list|expire ontologies/taxos/ontology.yaml
+  python -m minionto decisions ontologies/taxos/ontology.yaml
   python -m minionto registry register ontologies/taxos/ontology.yaml --actor A001,human
   python -m minionto registry activate taxos 0.1.0 --actor A005,human
   python -m minionto serve ontologies/taxos/ontology.yaml --keys examples/dev_api_keys.yaml   (또는 --registry)
@@ -120,6 +125,8 @@ def cmd_query(args) -> int:
     client = OntologyClient(onto, args.db_url, today=args.today)
     try:
         q = client.objects(args.type)
+        if args.as_:                                     # 21장: 이 실행자에게 보이는 범위로
+            q = q.secure(_actor(args.as_))
         for kind, value in args.steps or []:
             q = q.where(parse_where(value)) if kind == "where" else q.pivot(value)
         if args.order:
@@ -247,6 +254,70 @@ def cmd_registry(args) -> int:
     return 0
 
 
+def _load_env() -> None:
+    from dotenv import load_dotenv
+
+    from .db import REPO_ROOT
+    load_dotenv(REPO_ROOT / ".env")
+
+
+def _ttl(text: str):
+    from datetime import timedelta
+    unit = {"m": "minutes", "h": "hours", "d": "days"}.get(text[-1:])
+    if not unit or not text[:-1].isdigit():
+        raise SystemExit("--ttl 은 30m · 1h · 7d 형식입니다")
+    return timedelta(**{unit: int(text[:-1])})
+
+
+def cmd_token(args) -> int:
+    from .auth import AuthError, JwtAuth
+    _load_env()
+    try:
+        auth = JwtAuth()
+        token = auth.issue(sub=args.sub, role=args.role, actor_type=args.type,
+                           scopes=[x for x in args.scope.split(",") if x], ttl=_ttl(args.ttl))
+        if args.show:
+            p = auth.authenticate(token)
+            print(f"# {p.actor['id']} ({p.actor['role']}, {p.actor['type']}) · 범위 {', '.join(sorted(p.scopes))} "
+                  f"· 만료 {p.expires_at:%Y-%m-%d %H:%M} UTC · jti {p.token_id[:8]}", file=sys.stderr)
+    except AuthError as e:
+        print(f"토큰 오류: {e}", file=sys.stderr)
+        return 1
+    print(token)
+    return 0
+
+
+def cmd_approvals(args) -> int:
+    from .objects import OntologyClient
+    with OntologyClient.open(args.file, args.db_url, today=args.today) as client:
+        if args.op == "expire":
+            closed = client.actions.expire_stale()
+            print(f"기한이 지나 만료한 승인 요청: {len(closed)}건")
+            return 0
+        rows = client.actions.pending_approvals()
+    if not rows:
+        print("(대기 중인 승인 요청 없음)")
+    for r in rows:
+        exp = r["expires_at"].strftime("%Y-%m-%d %H:%M") if r["expires_at"] else "-"
+        print(f"{str(r['approval_id'])[:8]}  {r['action']}({r['target_pk']})  요청 {r['requested_by']['id']}  "
+              f"승인자 {'/'.join(r['approver_roles'])}  기한 {exp}{'  (기한 지남)' if r['overdue'] else ''}  "
+              f"변경 {len(r['preview'])}건")
+    return 0
+
+
+def cmd_decisions(args) -> int:
+    from .objects import OntologyClient
+    with OntologyClient.open(args.file, args.db_url) as client:
+        rows = client.policy.decisions(args.limit)
+    if not rows:
+        print("(정책 판단 기록 없음)")
+    for r in reversed(rows):
+        target = f"{r['object_type'] or ''}{'(' + r['target_pk'] + ')' if r['target_pk'] else ''}"
+        print(f"{str(r['created_at'])[:19]}  {r['decision']:5s} {r['kind']:8s} {r['actor_id']} ({r['actor_type']})  "
+              f"{target}  {r['policy'] or ''}  {json.dumps(r['detail'], ensure_ascii=False)}")
+    return 0
+
+
 def cmd_serve(args) -> int:
     import uvicorn
 
@@ -261,7 +332,14 @@ def cmd_serve(args) -> int:
         raise SystemExit("서빙할 온톨로지가 없습니다 (파일을 주거나 --registry 에 활성 버전을 등록하세요)")
     for s in served:
         print(f"  {s.name} v{s.version} ({s.origin})")
-    app = create_app(served, api_keys=load_api_keys(args.keys), today=args.today)
+    if args.auth == "jwt":
+        from .auth import JwtAuth
+        _load_env()
+        app = create_app(served, auth=JwtAuth(), today=args.today)
+    else:
+        if not args.keys:
+            raise SystemExit("--auth keys 에는 --keys 파일이 필요합니다")
+        app = create_app(served, api_keys=load_api_keys(args.keys), today=args.today)
     uvicorn.run(app, host=args.host, port=args.port)
     return 0
 
@@ -367,8 +445,33 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--today", help="$today 기준일 (예: 2027-01-18)")
     sp.add_argument("--sql", action="store_true", help="실행하지 않고 SQL만 출력")
     sp.add_argument("-v", "--verbose", action="store_true", help="실행한 SQL 출력")
+    sp.add_argument("--as", dest="as_", metavar="ACTOR", help="이 실행자의 권한으로 조회: 아이디,역할,유형 (21장)")
     sp.add_argument("--db-url")
     sp.set_defaults(func=cmd_query)
+
+    sp = sub.add_parser("token", help="개발용 토큰(JWT) 발급 (21장)")
+    tsub = sp.add_subparsers(dest="op", required=True)
+    t = tsub.add_parser("issue")
+    t.add_argument("--sub", required=True, help="실행자 아이디")
+    t.add_argument("--role", required=True)
+    t.add_argument("--type", required=True, choices=["human", "agent", "system"])
+    t.add_argument("--scope", required=True, help="쉼표 구분: objects:read,functions:call,actions:apply,approvals:decide")
+    t.add_argument("--ttl", default="1h", help="유효 기간 (30m · 1h · 7d)")
+    t.add_argument("--show", action="store_true", help="토큰 내용을 표준 오류로 함께 출력")
+    sp.set_defaults(func=cmd_token)
+
+    sp = sub.add_parser("approvals", help="승인 대기 목록 · 기한 지난 요청 만료 (21장)")
+    sp.add_argument("op", choices=["list", "expire"])
+    sp.add_argument("file")
+    sp.add_argument("--today")
+    sp.add_argument("--db-url")
+    sp.set_defaults(func=cmd_approvals)
+
+    sp = sub.add_parser("decisions", help="정책 판단 기록 (21장)")
+    sp.add_argument("file")
+    sp.add_argument("--limit", type=int, default=30)
+    sp.add_argument("--db-url")
+    sp.set_defaults(func=cmd_decisions)
 
     sp = sub.add_parser("call", help="Function 호출")
     sp.add_argument("file")
@@ -439,7 +542,9 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("files", nargs="*", help="온톨로지 정의 파일 (개발용)")
     sp.add_argument("--registry", action="store_true", help="Registry 의 활성 버전을 서빙")
     sp.add_argument("--registry-url")
-    sp.add_argument("--keys", required=True, help="개발용 API 키 파일 (YAML)")
+    sp.add_argument("--auth", choices=["keys", "jwt"], default="keys",
+                    help="keys: 개발용 키 파일(19장) · jwt: 서명된 토큰(21장, MINIONTO_TOKEN_SECRET)")
+    sp.add_argument("--keys", help="개발용 API 키 파일 (YAML)")
     sp.add_argument("--host", default="127.0.0.1")
     sp.add_argument("--port", type=int, default=8800)
     sp.add_argument("--today")
