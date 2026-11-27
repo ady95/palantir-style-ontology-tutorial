@@ -6,7 +6,7 @@
 
 ontology:
   name: taxos
-  version: 0.7.0
+  version: 0.8.0
   display_name: 세무 사무소 운영 온톨로지
   description: 고객·신고·필수 자료·업무를 객체로 정의하고, 자료 요청·담당자 배정 같은 업무를 Action으로 실행한다.
 
@@ -32,6 +32,7 @@ security:
         Consultation:       { field: customer.accountant_id, op: eq, value: $actor.id }
         RiskEvent:          { field: customer.accountant_id, op: eq, value: $actor.id }
         CustomerSegment:    { field: customer.accountant_id, op: eq, value: $actor.id }
+        Inquiry:            { field: customer.accountant_id, op: eq, value: $actor.id }
   property_policies:
     personal_info:
       description: AI 에이전트는 고객·담당자의 개인 식별 정보(대표자, 전화, 사업자등록번호, 이메일)를 보지 않는다
@@ -246,6 +247,32 @@ object_types:
       transitions:
         release_segment: { from: 유효, to: 해제 }
 
+  Inquiry:
+    display_name: 고객 문의
+    description: 고객이 카카오톡·이메일 등으로 보낸 문의 (33장). 상담 응대 에이전트가 답하거나 담당자에게 넘긴다 (34장).
+    source: { table: inquiries, primary_key: inquiry_id, id_strategy: prefixed_sequence, id_prefix: Q }
+    title_property: category
+    implements: [Trackable]
+    properties:
+      inquiry_id:  { type: string, required: true }
+      customer_id: { type: string, required: true }
+      channel:     { type: enum, values: [카카오톡, 이메일, 전화, 홈페이지], required: true }
+      received_at: { type: datetime, required: true }
+      question:    { type: string, required: true, display_name: 문의 내용 }
+      category:    { type: enum, values: [자료제출, 신고일정, 세금계산, 휴폐업, 기타], required: true, display_name: 분류 }
+      status:      { type: enum, values: [접수, 답변완료, 담당자확인], required: true }
+      answer:      { type: string, display_name: 답변 }
+      answered_by: { type: string }
+      answered_at: { type: datetime }
+      escalation:  { type: string, display_name: 넘긴 이유 }
+    state_machine:
+      property: status
+      initial: [접수]
+      terminal: [답변완료]
+      transitions:
+        answer_inquiry:   { from: [접수, 담당자확인], to: 답변완료 }
+        escalate_inquiry: { from: 접수, to: 담당자확인 }
+
 # ---------------------------------------------------------------------------
 # Link Type: forward_name 은 from 쪽에서, reverse_name 은 to 쪽에서 부르는 이름
 # ---------------------------------------------------------------------------
@@ -289,6 +316,9 @@ link_types:
   customer_segments:
     { from: Customer, to: CustomerSegment, cardinality: one_to_many,
       from_key: customer_id, to_key: customer_id, forward_name: segments, reverse_name: customer }
+  customer_inquiries:
+    { from: Customer, to: Inquiry, cardinality: one_to_many,
+      from_key: customer_id, to_key: customer_id, forward_name: inquiries, reverse_name: customer }
 
 # ---------------------------------------------------------------------------
 # Function: 업무 계산·판단 로직 (구현은 functions.py — 18장)
@@ -326,6 +356,20 @@ functions:
       customer: { type: object, object_type: Customer }
     returns: { type: object, object_type: Accountant }
     implementation: functions:recommend_assignee
+
+  unregistered_documents:
+    description: 고객 유형상 필요한데 자료 현황(제출 상태) 행이 없는 자료 유형 코드 (33장)
+    inputs:
+      tax_return: { type: object, object_type: TaxReturn }
+    returns: { type: list, items: string }
+    implementation: functions:unregistered_documents
+
+  documents_registered:
+    description: 필요한 자료 유형마다 자료 현황이 등록되어 있는가 (기록이 없으면 제출로도 미제출로도 보지 않는다)
+    inputs:
+      tax_return: { type: object, object_type: TaxReturn }
+    returns: { type: boolean }
+    implementation: functions:documents_registered
 
 # ---------------------------------------------------------------------------
 # Action: 검증된 업무 실행 (구현은 Action Engine — 18·20~22장)
@@ -465,6 +509,10 @@ actions:
     description: 자료가 모두 모인 신고를 검토 단계로 넘기고, 자료요청 업무를 닫고, 신고서검토 업무를 만든다.
     target: TaxReturn
     preconditions:
+      - message: 자료 현황이 하나도 등록되지 않았습니다. (조회로 표현한 조건 — 실행 가능 목록에도 쓰인다)
+        check: { some: { link: submissions } }
+      - message: 필수 자료 현황이 모두 등록되지 않았습니다 (기록이 없는 자료는 제출된 것으로 보지 않습니다).
+        check: { function: documents_registered, args: { tax_return: $target.return_id } }
       - message: 아직 제출되지 않은 자료가 있습니다.
         check: { none: { link: submissions, where: { field: status, op: in, value: [미요청, 요청됨] } } }
     permission:
@@ -725,3 +773,53 @@ actions:
           created_at:  $now
           note:        $params.note
     emits: [priority_contact_created]
+
+  # ---- 33장: 고객 문의 — 상담 응대 에이전트(34장)가 답하거나 담당자에게 넘긴다
+  answer_inquiry:
+    display_name: 문의 답변
+    description: 고객 문의에 답한다. 세액·가산세 계산 문의와 담당자에게 넘어간 문의는 사람만 답한다.
+    target: Inquiry
+    parameters:
+      answer: { type: string, description: 고객에게 보낼 답변 }
+    preconditions:
+      - message: 세액·가산세 계산 문의는 담당자가 답합니다.
+        check:
+          any:
+            - { field: $actor.type, op: eq, value: human }
+            - { field: category, op: ne, value: 세금계산 }
+      - message: 담당자에게 넘어간 문의는 담당자가 답합니다.
+        check:
+          any:
+            - { field: $actor.type, op: eq, value: human }
+            - { field: status, op: eq, value: 접수 }
+    permission:
+      roles: [세무사, 실무자, AI비서]
+      actor_types: [human, agent]
+    edits:
+      - update: target
+        set: { status: 답변완료, answer: $params.answer, answered_by: $actor.id, answered_at: $now }
+    emits: [inquiry_answered]
+
+  escalate_inquiry:
+    display_name: 문의를 담당자에게 넘기기
+    description: 답할 수 없는 문의를 담당자에게 넘기고, 담당자에게 고객연락 업무를 만든다.
+    target: Inquiry
+    parameters:
+      reason: { type: string, description: 넘기는 이유 (업무 메모에 남는다) }
+    permission:
+      roles: [세무사, 실무자, AI비서]
+      actor_types: [human, agent]
+    edits:
+      - update: target
+        set: { status: 담당자확인, escalation: $params.reason }
+      - create: Task
+        values:
+          customer_id: $target.customer_id
+          task_type:   고객연락
+          assignee_id: $target.customer.accountant_id
+          status:      대기
+          due_date:    $today
+          created_by:  $actor.type
+          created_at:  $now
+          note:        $params.reason
+    emits: [inquiry_escalated]

@@ -61,3 +61,19 @@ def recommend_assignee(ctx, customer):
         if acc != current and room > best_room:
             best, best_room = acc, room
     return best
+
+
+# ---------------------------------------------------------------------- 33장: 자료 현황 등록 여부
+def unregistered_documents(ctx, tax_return):
+    """고객 유형상 필요한데 자료 현황 행이 없는 자료 유형 코드 — 기록이 없는 것은 '모름'이다"""
+    c = tax_return.customer
+    flag = "for_corporation" if c.business_type == "법인" else \
+        "for_simplified" if c.vat_type == "간이과세자" else "for_general"
+    required = {d.doc_type_code for d in ctx.objects("DocumentType").where(**{flag: True}).all()}
+    have = {s.doc_type_code for s in tax_return.submissions.all()}
+    return sorted(required - have)
+
+
+def documents_registered(ctx, tax_return):
+    return not unregistered_documents(ctx, tax_return)
+

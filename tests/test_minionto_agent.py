@@ -45,7 +45,7 @@ def pick(c, risk_op: str) -> str:
 def test_context_shows_only_what_the_actor_can_use(tx):
     s = AgentSession(tx, AI)
     ctx = s.context()
-    assert set(ctx["actions"]) == {REQ, "start_review"}          # 11개 중 AI비서가 할 수 있는 것만
+    assert set(ctx["actions"]) == {REQ, "start_review", "answer_inquiry", "escalate_inquiry"}   # AI비서가 할 수 있는 것만 (33장: 문의 2개)
     assert "phone" not in ctx["object_types"]["Customer"]["properties"]
     assert "phone" in ctx["object_types"]["Customer"]["hidden"]
     text = s.context_text()
@@ -57,7 +57,7 @@ def test_context_shows_only_what_the_actor_can_use(tx):
     names = [t["function"]["name"] for t in s.tools()]
     assert names == ["find_objects", "get_object", "call_function", "list_actions", "check_action", "run_action"]
     per = [t["function"]["name"] for t in s.tools("per_action")]
-    assert per[-2:] == [REQ, "start_review"]
+    assert per[-4:] == [REQ, "start_review", "answer_inquiry", "escalate_inquiry"]
     with pytest.raises(ValueError):
         AgentSession(tx, TAX)                                       # 에이전트 실행자 전용
 
@@ -110,7 +110,9 @@ def test_failures_carry_next_steps(tx):
 
 def test_stale_read_is_rejected(tx):
     s = AgentSession(tx, AI)
-    ret = tx.actions.candidates("start_review", actor=AI).order_by("return_id").first().pk
+    ret = "R00548"                                                     # 자료가 모두 들어온 신고를 만든다
+    tx.conn.execute("UPDATE document_submissions SET status = '제출완료', submitted_at = '2027-01-17' "
+                    "WHERE return_id = %s AND status IN ('미요청', '요청됨')", (ret,))
     s.call("get_object", {"object_type": "TaxReturn", "id": ret})
     assert tx.actions.apply("start_review", ret, actor=TAX).ok         # 그사이 사람이 먼저
     out = s.call("run_action", {"action": "start_review", "target": ret})

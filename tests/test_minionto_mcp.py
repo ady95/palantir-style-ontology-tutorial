@@ -73,7 +73,7 @@ def test_tools_depend_on_token_scope(tx):
     assert full["get_object"].annotations.read_only_hint is True
     assert "missing_documents(tax_return)" in full["call_function"].description
     enum = full["run_action"].input_schema["properties"]["action"]["enum"]
-    assert enum == [REQ, "start_review"]                                # 실행자의 역할로 거른 Action
+    assert enum == [REQ, "start_review", "answer_inquiry", "escalate_inquiry"]   # 실행자의 역할로 거른 Action
 
 
 def test_results_errors_resources_prompts(tx):
@@ -115,7 +115,9 @@ def test_session_survives_connections_and_is_per_token(tx):
 
 
 def test_read_only_token_cannot_run_and_is_told_so(tx):
-    ready = tx.actions.candidates("start_review", actor=AI).order_by("return_id").first().pk
+    ready = "R00548"                                                   # 자료가 모두 들어온 신고를 만든다
+    tx.conn.execute("UPDATE document_submissions SET status = '제출완료', submitted_at = '2027-01-17' "
+                    "WHERE return_id = %s AND status IN ('미요청', '요청됨')", (ready,))
     tok = token(["objects:read"])
 
     async def go():

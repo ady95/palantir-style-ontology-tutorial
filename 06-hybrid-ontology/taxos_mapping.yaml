@@ -167,10 +167,12 @@ not_mapped:
   object_types:
     Notification: 알림 발송 결과는 운영 기록(23장) — 의미 모델에 없음
     CustomerSegment: 추론 결과를 받아 둔 것(30장) — 의미 모델에서는 정의 클래스 소속으로 표현 (inferred)
+    Inquiry:         고객 문의는 운영 기록(33장) — 의미 모델에 없음
   link_types:
     tax_return_notifications: 알림 발송 결과는 운영 기록
     customer_notifications:   알림 발송 결과는 운영 기록
     customer_segments:        추론 결과를 받아 둔 것(30장)
+    customer_inquiries:       고객 문의는 운영 기록(33장)
 
 semantic_only: {}
 

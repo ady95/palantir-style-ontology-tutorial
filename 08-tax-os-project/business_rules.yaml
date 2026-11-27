@@ -1,0 +1,157 @@
+# =============================================================================
+#  세무 사무소 업무 규칙 목록 (33장) — 실습용으로 단순화한 규칙이며 실제 세법·업무 규정과 다를 수 있다
+#  rule:          업무 담당자가 쓰는 문장
+#  kind:          실행조건 · 권한 · 승인 · 상태전이 · 정책 · DB제약 · 멱등
+#  implemented_by: 정의(ontology.yaml) 또는 DB 에서 이 규칙을 지키는 곳
+#  scenario:      규칙이 지켜지는지 확인하는 사례 (check_rules.py 가 롤백 안에서 실행)
+# =============================================================================
+rules:
+  - id: R01
+    rule: 자료 요청은 자료수집중인 신고에만 한다
+    kind: 실행조건
+    implemented_by: { action: request_missing_documents, precondition: 자료수집중인 신고만 }
+    scenario: { do: apply, actor: TAX, action: request_missing_documents, target: R00001,
+                expect: { status: rejected, message: 자료수집중인 신고만 } }
+
+  - id: R02
+    rule: 휴업·폐업 고객에게는 자료를 요청하지 않고 담당자가 확인한다
+    kind: 실행조건
+    implemented_by: { action: request_missing_documents, precondition: 휴업·폐업 고객 }
+    scenario: { do: apply, actor: AI, action: request_missing_documents, target: R00360,
+                expect: { status: rejected, message: 휴업·폐업 } }
+
+  - id: R03
+    rule: 아직 요청하지 않은(미요청) 자료가 있을 때만 요청한다
+    kind: 실행조건
+    implemented_by: { action: request_missing_documents, precondition: 요청할 자료(미요청 상태)가 없습니다 }
+    scenario: { do: apply, actor: AI, action: request_missing_documents, target: R00024,
+                expect: { status: rejected, message: 요청할 자료 } }
+
+  - id: R04
+    rule: 진행 중인 자료요청 업무가 있으면 다시 요청하지 않는다
+    kind: 실행조건
+    implemented_by: { action: request_missing_documents, precondition: 이미 진행 중인 자료요청 업무 }
+    scenario: { do: apply, actor: AI, action: request_missing_documents, target: R00548,
+                expect: { status: rejected, message: 이미 진행 중인 자료요청 업무 } }
+
+  - id: R05
+    rule: 고위험 고객에 대한 AI의 자료 요청은 세무사 승인 후 실행한다
+    kind: 승인
+    implemented_by: { approval: request_missing_documents }
+    scenario: { do: apply, actor: AI, action: request_missing_documents, target: R00517,
+                expect: { status: approval_required } }
+
+  - id: R06
+    rule: 승인은 사람(세무사)만 하고, AI는 승인할 수 없다
+    kind: 승인
+    implemented_by: { approval: request_missing_documents }
+    scenario: { do: decide, actor: AI, request_by: AI, action: request_missing_documents, target: R00517,
+                expect: { status: denied, message: 승인할 수 없습니다 } }
+
+  - id: R07
+    rule: 검토는 필수 자료가 모두 제출(또는 해당없음)된 뒤 시작한다
+    kind: 실행조건
+    implemented_by: { action: start_review, precondition: 아직 제출되지 않은 자료가 있습니다 }
+    scenario: { do: apply, actor: AI, action: start_review, target: R00146,
+                expect: { status: rejected, message: 아직 제출되지 않은 자료 } }
+
+  - id: R08
+    rule: 자료 현황이 등록되지 않은 신고는 검토를 시작하지 않는다 (기록이 없으면 제출로 보지 않는다)
+    kind: 실행조건
+    implemented_by: { action: start_review, precondition: 필수 자료 현황이 모두 등록되지 않았습니다 }
+    scenario: { do: apply, actor: AI, action: start_review, target: R00035,
+                expect: { status: rejected, message: 등록되지 않았습니다 } }
+
+  - id: R09
+    rule: 신고 완료 처리는 세무사만 한다
+    kind: 권한
+    implemented_by: { permission: complete_filing }
+    scenario: { do: apply, actor: STAFF, action: complete_filing, target: R00003,
+                expect: { status: denied } }
+
+  - id: R10
+    rule: 신고는 자료수집중 → 검토중 → 신고완료·기한후신고 순서로만 바뀐다
+    kind: 상태전이
+    implemented_by: { state_machine: TaxReturn }
+    scenario: { do: apply, actor: TAX, action: complete_filing, target: R00146,
+                expect: { status: rejected } }
+
+  - id: R11
+    rule: 신고 기한이 지나면 신고 완료가 아니라 기한후신고로 처리한다
+    kind: 실행조건
+    implemented_by: { action: complete_filing, precondition: 신고 기한이 지났습니다 }
+    scenario: { do: apply, actor: TAX, action: complete_filing, today: "2099-01-01",
+                target_sql: "SELECT r.return_id FROM tax_returns r WHERE r.status = '검토중' AND NOT EXISTS (SELECT 1 FROM document_submissions s WHERE s.return_id = r.return_id AND s.status IN ('미요청', '요청됨')) ORDER BY 1 LIMIT 1",
+                expect: { status: rejected, message: 신고 기한이 지났습니다 } }
+
+  - id: R12
+    rule: 담당 고객 수가 최대치인 담당자에게는 새로 배정하지 않는다
+    kind: 실행조건
+    implemented_by: { action: assign_accountant, precondition: 최대치에 도달했습니다 }
+    scenario: { do: apply, actor: TAX, action: assign_accountant, target: C0001, params: { accountant: A002 },
+                expect: { status: rejected, message: 최대치 } }
+
+  - id: R13
+    rule: 실무자는 본인 담당 고객과 그 고객의 신고·자료·업무만 본다
+    kind: 정책
+    implemented_by: { policy: own_customers }
+    scenario: { do: count, actor: STAFF, object_type: Customer, expect: { count: 43 } }
+
+  - id: R14
+    rule: AI 에이전트는 고객의 대표자·전화·사업자등록번호를 보지 않는다
+    kind: 정책
+    implemented_by: { policy: personal_info }
+    scenario: { do: hidden, actor: AI, object_type: Customer, target: C0001,
+                expect: { hidden: [business_reg_no, phone, representative] } }
+
+  - id: R15
+    rule: 자료 접수 기록은 사람(세무사·실무자)만 한다
+    kind: 권한
+    implemented_by: { permission: record_document_submission }
+    scenario: { do: apply, actor: AI, action: record_document_submission,
+                target_sql: "SELECT submission_id FROM document_submissions WHERE return_id = 'R00146' AND status = '미요청' ORDER BY 1 LIMIT 1",
+                expect: { status: denied } }
+
+  - id: R16
+    rule: 세액·가산세 계산 문의에는 AI가 답하지 않는다
+    kind: 실행조건
+    implemented_by: { action: answer_inquiry, precondition: 세액·가산세 계산 문의 }
+    scenario: { do: apply, actor: AI, action: answer_inquiry, target: Q90001, params: { answer: 약 120만 원입니다 },
+                setup: ["INSERT INTO inquiries VALUES ('Q90001', 'C0001', '카카오톡', '2027-01-17 10:00', '이번 부가세 얼마 나와요?', '세금계산', '접수', NULL, NULL, NULL, NULL)"],
+                expect: { status: rejected, message: 세액·가산세 } }
+
+  - id: R17
+    rule: 담당자에게 넘어간 문의는 담당자가 답한다
+    kind: 실행조건
+    implemented_by: { action: answer_inquiry, precondition: 담당자에게 넘어간 문의 }
+    scenario: { do: apply, actor: AI, action: answer_inquiry, target: Q90002, params: { answer: 확인했습니다 },
+                setup: ["INSERT INTO inquiries VALUES ('Q90002', 'C0001', '이메일', '2027-01-17 10:00', '자료를 다시 보내야 하나요?', '자료제출', '담당자확인', NULL, NULL, NULL, '고객이 원본 분실')"],
+                expect: { status: rejected, message: 담당자에게 넘어간 } }
+
+  - id: R18
+    rule: 추론으로 정한 고객 분류는 시스템만 붙인다 (사람은 해제만)
+    kind: 권한
+    implemented_by: { permission: assign_segment }
+    scenario: { do: apply, actor: TAX, action: assign_segment, target: C0001,
+                params: { segment: 반복위험, inferred_by: 수동 }, expect: { status: denied } }
+
+  - id: R19
+    rule: 법인은 간이과세자가 될 수 없다
+    kind: DB제약
+    implemented_by: { db: customers_check }
+    scenario: { do: sql, sql: "UPDATE customers SET vat_type = '간이과세자' WHERE business_type = '법인'",
+                expect: { error: CheckViolation } }
+
+  - id: R20
+    rule: 신고완료·기한후신고에는 신고일이 있어야 한다
+    kind: DB제약
+    implemented_by: { db: tax_returns_check }
+    scenario: { do: sql, sql: "UPDATE tax_returns SET status = '신고완료' WHERE return_id = 'R00146'",
+                expect: { error: CheckViolation } }
+
+  - id: R21
+    rule: 같은 업무 요청을 다시 보내면 처음 결과를 돌려주고 두 번 실행하지 않는다
+    kind: 멱등
+    implemented_by: { engine: idempotency_key }
+    scenario: { do: apply_twice, actor: AI, action: request_missing_documents, target: R00146,
+                expect: { status: replayed } }

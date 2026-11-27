@@ -64,7 +64,9 @@ def main() -> int:
             {"field": "customer.risk_level", "op": "ne", "value": "높음"}).order_by("return_id").first().pk
         risky = a.candidates(REQ, actor=AI).where(
             {"field": "customer.risk_level", "op": "eq", "value": "높음"}).order_by("return_id").first().pk
-        ready = a.candidates("start_review", actor=AI).order_by("return_id").first().pk
+        ready = "R00548"                                # 자료가 모두 들어온 신고를 만든다 (33장부터 미등록 신고는 후보 아님)
+        onto.conn.execute("UPDATE document_submissions SET status = '제출완료', submitted_at = %s "
+                          "WHERE return_id = %s AND status IN ('미요청', '요청됨')", (AS_OF, ready))
 
         # ------------------------------------------------------------------ 1
         section("1. 컨텍스트 — 에이전트에게 무엇을 보여 줄까")

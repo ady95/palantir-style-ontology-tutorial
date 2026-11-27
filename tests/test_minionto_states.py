@@ -99,7 +99,8 @@ def test_state_is_checked_with_other_rules(tx):
 def test_candidates_include_state(tx):
     q = tx.actions.candidates("start_review")
     expected = scalar(tx, """SELECT count(*) FROM tax_returns r WHERE status = '자료수집중' AND NOT EXISTS (
-        SELECT 1 FROM document_submissions s WHERE s.return_id = r.return_id AND s.status IN ('미요청','요청됨'))""")
+        SELECT 1 FROM document_submissions s WHERE s.return_id = r.return_id AND s.status IN ('미요청','요청됨'))
+        AND EXISTS (SELECT 1 FROM document_submissions s WHERE s.return_id = r.return_id)""")   # 33장: 자료 현황 등록
     assert q.count() == expected
     assert all(r.status == "검토중" for r in tx.actions.candidates("complete_filing").limit(50))
 
