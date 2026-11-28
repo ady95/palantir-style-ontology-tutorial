@@ -216,7 +216,7 @@ class Function(Strict):
     inputs: dict[str, Parameter] = Field(default_factory=dict)
     returns: Parameter
     implementation: str = Field(pattern=r"^[A-Za-z_][\w.]*:[A-Za-z_]\w*$",
-                                description="'모듈경로:함수명' (예: functions:filing_delay_risk)")
+                                description="'모듈경로:함수명' (예: functions:함수이름)")
 
 
 # ---------------------------------------------------------------------------
@@ -231,7 +231,7 @@ class Rule(Strict):
 class Permission(Strict):
     roles: list[str] = Field(description="실행할 수 있는 역할")
     actor_types: list[Literal["human", "agent", "system"]] = Field(default_factory=lambda: ["human", "agent"])
-    check: Condition | None = Field(None, description="역할 외 추가 조건 (예: 본인 담당 고객만)")
+    check: Condition | None = Field(None, description="역할 외 추가 조건 (예: 본인에게 배정된 객체만)")
 
 
 class Approval(Strict):
@@ -341,7 +341,7 @@ class Subscription(Strict):
 class ActorProfile(Strict):
     """$actor.<속성> 으로 쓸 실행자 정보를 실행자 자신의 객체에서 읽는다 (35장).
     값은 토큰이나 호출자가 준 것이 아니라 온톨로지 데이터에서 온다 — 실행자가 스스로 바꿀 수 없다."""
-    object_type: str = Field(description="실행자 id 가 이 객체 타입의 기본키 (예: 정비원)")
+    object_type: str = Field(description="실행자 id 가 이 객체 타입의 기본키")
     roles: list[str] | None = Field(None, description="이 역할의 실행자만 객체를 찾는다 (비우면 모든 실행자)")
     attributes: list[str] = Field(description="$actor.<이름> 으로 쓸 속성")
 
