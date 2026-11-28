@@ -1,0 +1,2101 @@
+[
+ {
+  "target": "qa:Q004",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "시스템",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "시스템",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q007",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 승인 없이 바로 처리합니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q009",
+  "change": "out_of_scope",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "reason": "고객 정보 등록·변경은 이번 범위가 아님",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q010",
+  "change": "out_of_scope",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "실무자",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "실무자",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "reason": "고객 정보 등록·변경은 이번 범위가 아님",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q011",
+  "change": "out_of_scope",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "reason": "고객 정보 등록·변경은 이번 범위가 아님",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q012",
+  "change": "out_of_scope",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "시스템",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "시스템",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "reason": "고객 정보 등록·변경은 이번 범위가 아님",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q014",
+  "change": "out_of_scope",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "reason": "고객 정보 등록·변경은 이번 범위가 아님",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q015",
+  "change": "out_of_scope",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "reason": "고객 정보 등록·변경은 이번 범위가 아님",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q017",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "실무자",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "실무자",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q018",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q019",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "시스템",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "시스템",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q021",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 승인 없이 바로 처리합니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q026",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "시스템",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "시스템",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q036",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 승인 없이 바로 처리합니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q037",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "실무자",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 승인 없이 바로 처리합니다.",
+   "case": {
+    "actor_role": "실무자",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q041",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q042",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "시스템",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "시스템",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q045",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 승인 없이 바로 처리합니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q053",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "DocumentSubmission",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 승인 없이 바로 처리합니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "DocumentSubmission",
+    "target_state": null,
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q054",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "DocumentSubmission",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "접수한 자료가 제출완료가 되고 제출일이 기록됩니다. 자료 접수 이벤트가 나가 필수 자료가 모두 모이면 검토가 자동으로 시작됩니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "DocumentSubmission",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q055",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "예, 할 수 있습니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q056",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "실무자",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "예, 할 수 있습니다.",
+   "case": {
+    "actor_role": "실무자",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q057",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "예, 할 수 있습니다.",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q064",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "시스템",
+    "target": "TaxReturn",
+    "target_state": "자료수집중",
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 승인 없이 바로 처리합니다.",
+   "case": {
+    "actor_role": "시스템",
+    "target": "TaxReturn",
+    "target_state": "자료수집중",
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q067",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "실무자",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "실무자",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q068",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q069",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "시스템",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "시스템",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q071",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 승인 없이 바로 처리합니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q080",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 승인 없이 바로 처리합니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q088",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 승인 없이 바로 처리합니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q094",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "DocumentSubmission",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "예, 할 수 있습니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q095",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "시스템",
+    "target": "DocumentSubmission",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "시스템",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q096",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "DocumentSubmission",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아직 요청하지 않은(미요청) 자료가 모두 요청됨으로 바뀌고, 담당자에게 자료요청 업무가 생깁니다.",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "DocumentSubmission",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q101",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "실무자",
+    "target": "Inquiry",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "예, 할 수 있습니다.",
+   "case": {
+    "actor_role": "실무자",
+    "target": "Inquiry",
+    "target_state": null,
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q102",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Inquiry",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "예, 할 수 있습니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Inquiry",
+    "target_state": null,
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q103",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "시스템",
+    "target": "Inquiry",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "시스템",
+    "target": "Inquiry",
+    "target_state": null,
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q104",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "Inquiry",
+    "target_state": null,
+    "where": {
+     "field": "customer.business_status",
+     "op": "eq",
+     "value": "폐업"
+    },
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 승인 없이 바로 처리합니다.",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "Inquiry",
+    "target_state": null,
+    "where": {
+     "field": "customer.business_status",
+     "op": "eq",
+     "value": "폐업"
+    },
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q111",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "시스템",
+    "target": "Inquiry",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "시스템",
+    "target": "Inquiry",
+    "target_state": null,
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q112",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "Inquiry",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 승인 없이 바로 처리합니다.",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "Inquiry",
+    "target_state": null,
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q115",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "실무자",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "실무자",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q116",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q117",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "시스템",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "시스템",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q118",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 승인 없이 바로 처리합니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": "검토중",
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q121",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "실무자",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "실무자",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q122",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q123",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "시스템",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "시스템",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q124",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 승인 없이 바로 처리합니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q125",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "신고 상태가 신고완료로 바뀌고 신고일이 기록됩니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q127",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "실무자",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "실무자",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q128",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q129",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "시스템",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 할 수 없습니다.",
+   "case": {
+    "actor_role": "시스템",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "불가"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q130",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 승인 없이 바로 처리합니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "TaxReturn",
+    "target_state": null,
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q136",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "담당 고객 수가 최대치인 담당자에게는 배정할 수 없습니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q137",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "아니요, 승인 없이 바로 처리합니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": "가능"
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q138",
+  "change": "answer",
+  "before": {
+   "answer": "문서에 없음",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "after": {
+   "answer": "고객의 담당자가 바뀌고, 완료된 담당자배정 업무가 하나 남습니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Customer",
+    "target_state": null,
+    "where": null,
+    "expect": null
+   }
+  },
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q013",
+  "change": "out_of_scope",
+  "before": {
+   "answer": "아니요, 법인은 간이과세자가 될 수 없습니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Customer",
+    "target_state": null,
+    "where": {
+     "all": [
+      {
+       "field": "business_type",
+       "op": "eq",
+       "value": "법인"
+      },
+      {
+       "field": "vat_type",
+       "op": "eq",
+       "value": "간이과세자"
+      }
+     ]
+    },
+    "expect": "불가"
+   }
+  },
+  "after": {
+   "answer": "아니요, 법인은 간이과세자가 될 수 없습니다.",
+   "case": {
+    "actor_role": "세무사",
+    "target": "Customer",
+    "target_state": null,
+    "where": {
+     "all": [
+      {
+       "field": "business_type",
+       "op": "eq",
+       "value": "법인"
+      },
+      {
+       "field": "vat_type",
+       "op": "eq",
+       "value": "간이과세자"
+      }
+     ]
+    },
+    "expect": "불가"
+   }
+  },
+  "reason": "데이터 제약(법인은 간이과세자 불가)이지 Action 의 판단이 아님 — DB 제약으로 따로 검사",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q090",
+  "change": "fix",
+  "before": {
+   "answer": "폐업 고객에게는 자료를 요청하지 않고 담당자가 상황을 확인합니다.",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "DocumentSubmission",
+    "target_state": null,
+    "where": {
+     "field": "tax_return.customer.business_status",
+     "op": "eq",
+     "value": "폐업"
+    },
+    "expect": "불가"
+   }
+  },
+  "after": {
+   "answer": "폐업 고객에게는 자료를 요청하지 않고 담당자가 상황을 확인합니다.",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "TaxReturn",
+    "target_state": "자료수집중",
+    "where": {
+     "field": "customer.business_status",
+     "op": "eq",
+     "value": "폐업"
+    },
+    "expect": "불가"
+   }
+  },
+  "reason": "자료 요청의 대상은 신고",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q091",
+  "change": "fix",
+  "before": {
+   "answer": "휴업 고객에게는 자료를 요청하지 않고 담당자가 직접 확인합니다.",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "DocumentSubmission",
+    "target_state": null,
+    "where": {
+     "field": "tax_return.customer.business_status",
+     "op": "eq",
+     "value": "휴업"
+    },
+    "expect": "불가"
+   }
+  },
+  "after": {
+   "answer": "휴업 고객에게는 자료를 요청하지 않고 담당자가 직접 확인합니다.",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "TaxReturn",
+    "target_state": "자료수집중",
+    "where": {
+     "field": "customer.business_status",
+     "op": "eq",
+     "value": "휴업"
+    },
+    "expect": "불가"
+   }
+  },
+  "reason": "자료 요청의 대상은 신고",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q092",
+  "change": "fix",
+  "before": {
+   "answer": "세무사 승인 후 발송됩니다.",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "DocumentSubmission",
+    "target_state": null,
+    "where": {
+     "field": "tax_return.customer.risk_level",
+     "op": "eq",
+     "value": "높음"
+    },
+    "expect": "승인 필요"
+   }
+  },
+  "after": {
+   "answer": "세무사 승인 후 발송됩니다.",
+   "case": {
+    "actor_role": "AI비서",
+    "target": "TaxReturn",
+    "target_state": "자료수집중",
+    "where": {
+     "field": "customer.risk_level",
+     "op": "eq",
+     "value": "높음"
+    },
+    "expect": "승인 필요"
+   }
+  },
+  "reason": "자료 요청의 대상은 신고",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "qa:Q093",
+  "change": "fix",
+  "before": {
+   "answer": "진행 중인 자료요청 업무가 있으면 재요청이 막힙니다.",
+   "case": {
+    "actor_role": "실무자",
+    "target": "DocumentSubmission",
+    "target_state": null,
+    "where": {
+     "some": {
+      "link": "tax_return.tasks",
+      "where": {
+       "all": [
+        {
+         "field": "task_type",
+         "op": "eq",
+         "value": "자료요청"
+        },
+        {
+         "field": "status",
+         "op": "eq",
+         "value": "진행중"
+        }
+       ]
+      }
+     }
+    },
+    "expect": "불가"
+   }
+  },
+  "after": {
+   "answer": "진행 중인 자료요청 업무가 있으면 재요청이 막힙니다.",
+   "case": {
+    "actor_role": "실무자",
+    "target": "TaxReturn",
+    "target_state": "자료수집중",
+    "where": {
+     "some": {
+      "link": "tasks",
+      "where": {
+       "all": [
+        {
+         "field": "task_type",
+         "op": "eq",
+         "value": "자료요청"
+        },
+        {
+         "field": "status",
+         "op": "eq",
+         "value": "진행중"
+        }
+       ]
+      }
+     }
+    },
+    "expect": "불가"
+   }
+  },
+  "reason": "자료 요청의 대상은 신고",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:assign_customer_accountant",
+  "change": "set",
+  "path": "definition.emits",
+  "before": [],
+  "after": [
+   "accountant_assigned"
+  ],
+  "reason": "이벤트는 문서에 없는 시스템 약속 — 알림·감사 기록이 구독한다",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:assign_customer_accountant",
+  "change": "rename",
+  "before": "assign_customer_accountant",
+  "after": "assign_accountant",
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:register_or_update_customer",
+  "change": "reject",
+  "reason": "고객 등록·변경은 이번 범위가 아니고",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:change_risk_level",
+  "change": "set",
+  "path": "definition.emits",
+  "before": [],
+  "after": [
+   "risk_level_changed"
+  ],
+  "reason": "이벤트는 문서에 없는 시스템 약속 — 알림·감사 기록이 구독한다",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:change_risk_level",
+  "change": "rename",
+  "before": "change_risk_level",
+  "after": "update_risk_level",
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:request_documents",
+  "change": "keep_active",
+  "after": "request_missing_documents",
+  "reason": "대상을 자료 하나(DocumentSubmission)로 잡아 신고 단위 요청·자료요청 업무 확인이 빠짐 — 기존 정의 유지",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:cancel_document_request",
+  "change": "keep_active",
+  "after": "cancel_document_request",
+  "reason": "대상이 자료 하나라 신고 단위 취소와 자료요청 업무 취소를 표현하지 못함 — 기존 정의 유지",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:record_document_receipt",
+  "change": "set",
+  "path": "definition.emits",
+  "before": [],
+  "after": [
+   "document_received"
+  ],
+  "reason": "자동 검토 시작 구독(auto_start_review)이 이 이벤트를 기다린다",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:record_document_receipt",
+  "change": "rename",
+  "before": "record_document_receipt",
+  "after": "record_document_submission",
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:start_tax_return_review",
+  "change": "set",
+  "path": "definition.permission.roles",
+  "before": [
+   "시스템"
+  ],
+  "after": [
+   "세무사",
+   "실무자",
+   "AI비서",
+   "시스템"
+  ],
+  "reason": "문서에 주어가 없던 문장 — 사람·AI 도 검토를 시작한다(구독은 시스템으로)",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:start_tax_return_review",
+  "change": "set",
+  "path": "definition.permission.actor_types",
+  "before": [
+   "system"
+  ],
+  "after": [
+   "human",
+   "agent",
+   "system"
+  ],
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:start_tax_return_review",
+  "change": "remove",
+  "path": "definition.parameters.due_date",
+  "before": {
+   "type": "date",
+   "required": true,
+   "description": "생성할 신고서검토 업무의 기한"
+  },
+  "after": null,
+  "reason": "구독이 입력 없이 실행하므로 필수 입력을 둘 수 없음 — 업무 기한은 신고 기한으로",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:start_tax_return_review",
+  "change": "set",
+  "path": "definition.edits.2.values.due_date",
+  "before": "$params.due_date",
+  "after": "$target.due_date",
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:start_tax_return_review",
+  "change": "set",
+  "path": "definition.edits.2.values.created_by",
+  "before": "system",
+  "after": "$actor.type",
+  "reason": "실행자 유형을 그대로 남긴다",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:start_tax_return_review",
+  "change": "set",
+  "path": "definition.emits",
+  "before": [],
+  "after": [
+   "review_started"
+  ],
+  "reason": "이벤트는 문서에 없는 시스템 약속 — 알림·감사 기록이 구독한다",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:start_tax_return_review",
+  "change": "rename",
+  "before": "start_tax_return_review",
+  "after": "start_review",
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:return_to_document_collection",
+  "change": "remove",
+  "path": "definition.parameters.assignee_id",
+  "before": {
+   "type": "string",
+   "required": true,
+   "description": "고객 연락 업무를 맡을 담당자의 accountant_id"
+  },
+  "after": null,
+  "reason": "샌드박스에서 없는 담당자 키로 업무가 만들어지다 DB 외래키 오류 — 담당자는 고객의 담당자로",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:return_to_document_collection",
+  "change": "remove",
+  "path": "definition.parameters.due_date",
+  "before": {
+   "type": "date",
+   "required": true,
+   "description": "고객 연락 업무의 기한"
+  },
+  "after": null,
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:return_to_document_collection",
+  "change": "set",
+  "path": "definition.edits.2.values.assignee_id",
+  "before": "$params.assignee_id",
+  "after": "$target.customer.accountant_id",
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:return_to_document_collection",
+  "change": "set",
+  "path": "definition.edits.2.values.due_date",
+  "before": "$params.due_date",
+  "after": "$target.due_date",
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:return_to_document_collection",
+  "change": "set",
+  "path": "definition.edits.1.where.all.1",
+  "before": {
+   "field": "status",
+   "op": "eq",
+   "value": "진행중"
+  },
+  "after": {
+   "field": "status",
+   "op": "in",
+   "value": [
+    "대기",
+    "진행중"
+   ]
+  },
+  "reason": "대기 중인 검토 업무도 함께 취소한다",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:return_to_document_collection",
+  "change": "set",
+  "path": "transitions.1.from",
+  "before": [
+   "진행중"
+  ],
+  "after": [
+   "대기",
+   "진행중"
+  ],
+  "reason": "위 조건을 바꾸자 검증기가 상태 머신 전이와 어긋난다고 알려 줌",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:return_to_document_collection",
+  "change": "set",
+  "path": "definition.emits",
+  "before": [],
+  "after": [
+   "review_returned"
+  ],
+  "reason": "이벤트는 문서에 없는 시스템 약속 — 알림·감사 기록이 구독한다",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:return_to_document_collection",
+  "change": "rename",
+  "before": "return_to_document_collection",
+  "after": "return_to_collection",
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:complete_tax_return",
+  "change": "set",
+  "path": "definition.emits",
+  "before": [],
+  "after": [
+   "tax_return_filed"
+  ],
+  "reason": "이벤트는 문서에 없는 시스템 약속 — 알림·감사 기록이 구독한다",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:complete_tax_return",
+  "change": "rename",
+  "before": "complete_tax_return",
+  "after": "complete_filing",
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:process_late_filing",
+  "change": "set",
+  "path": "definition.emits",
+  "before": [],
+  "after": [
+   "tax_return_filed_late"
+  ],
+  "reason": "이벤트는 문서에 없는 시스템 약속 — 알림·감사 기록이 구독한다",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:process_late_filing",
+  "change": "rename",
+  "before": "process_late_filing",
+  "after": "file_late",
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:forward_inquiry",
+  "change": "set",
+  "path": "definition.permission.roles",
+  "before": [
+   "AI비서"
+  ],
+  "after": [
+   "세무사",
+   "실무자",
+   "AI비서"
+  ],
+  "reason": "상담 로그에는 AI 장면만 있었음 — 사람도 넘긴다",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:forward_inquiry",
+  "change": "set",
+  "path": "definition.permission.actor_types",
+  "before": [
+   "agent"
+  ],
+  "after": [
+   "human",
+   "agent"
+  ],
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:forward_inquiry",
+  "change": "set",
+  "path": "definition.emits",
+  "before": [],
+  "after": [
+   "inquiry_escalated"
+  ],
+  "reason": "이벤트는 문서에 없는 시스템 약속 — 알림·감사 기록이 구독한다",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:forward_inquiry",
+  "change": "rename",
+  "before": "forward_inquiry",
+  "after": "escalate_inquiry",
+  "reason": null,
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ },
+ {
+  "target": "action:answer_inquiry",
+  "change": "set",
+  "path": "definition.emits",
+  "before": [],
+  "after": [
+   "inquiry_answered"
+  ],
+  "reason": "이벤트는 문서에 없는 시스템 약속 — 알림·감사 기록이 구독한다",
+  "by": "A001",
+  "at": "2026-11-28T03:36:18+00:00"
+ }
+]

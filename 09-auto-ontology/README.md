@@ -22,3 +22,25 @@ uv run pytest -q tests/test_auto_extract.py                # LLM 없는 부분
 객체 모델(객체·속성·링크·Function·역할·상태 값)은 이미 있다고 보고 세무 정의의 것을 쓴다. 문서에서 만드는 것은 Action 과 상태 전이다.
 DSL 변환 예시로는 다른 도메인(Northwind·설비 정비)의 Action 을 보여 줘 정답이 프롬프트에 섞이지 않게 했다.
 LLM 은 `.env` 의 OpenAI 호환 API, 임베딩은 `EMBED_BASE_URL`·`EMBED_SERVER_MODEL` 을 쓴다.
+
+## 37장 — Q/A 기반 생성과 전문가 검증·등록 관문
+
+| 파일 | 내용 |
+|---|---|
+| [`qa.py`](qa.py) | 문서 → Q/A(질문·답·근거·시스템에서 확인할 형태) → 규칙·Action 후보, Q/A → 판단 테스트 |
+| [`37_qa.py`](37_qa.py) | 실행과 평가: 36장과 같은 채점 + Q/A 테스트(초안·정답 정의 양쪽에서) |
+| [`review.py`](review.py) | 검토 기록 적용(수정 기록), 샌드박스 실행, 등록 관문 6가지 |
+| [`review/review_1.yaml`](review/review_1.yaml) | 1회차 초안에 대한 전문가 검토 기록 (저자가 세무 정의를 기준으로 작성) |
+| [`37_review.py`](37_review.py) | 관문(검토 전) → 검토 적용 → 관문(검토 후) → Registry 등록·활성화(롤백) → 정답과 비교 |
+| `results37/` | 실행별 Q/A(`qa_*.json`), 초안(`draft_*.yaml`), 결과(`run_*.json`) |
+
+```bash
+uv run python 09-auto-ontology/37_qa.py --runs 3           # Q/A 기반 생성 (LLM)
+uv run python 09-auto-ontology/37_qa.py --retest           # 저장된 결과로 Q/A 테스트만 다시 (LLM 없음)
+uv run python 09-auto-ontology/37_review.py                # 검토·관문·등록 (LLM 없음, 모두 롤백)
+uv run pytest -q tests/test_review_gate.py
+```
+
+등록 관문: 검증기 · 검토 완료(모든 Action 결정, 문서에 답이 없던 질문에 전문가 답) · 변경 범위(활성 버전과의 차이가 검토한 Action 안에만,
+breaking 은 명시 허용) · DB 대조 · 샌드박스 실행(항상 롤백) · Q/A 테스트. 모두 통과해야 Registry 에 draft 로 등록하고,
+활성화는 등록자가 아닌 다른 사람이 한다(19장 Registry 규칙).

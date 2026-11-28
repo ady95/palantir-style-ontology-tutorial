@@ -1,0 +1,2833 @@
+{
+ "summary": {
+  "run": 3,
+  "chunks": 3,
+  "qa": {
+   "qa": 130,
+   "grounded": 83,
+   "gaps": 47,
+   "with_expect": 32,
+   "by_source": {
+    "manual": 81,
+    "logs": 49
+   },
+   "tasks": 14
+  },
+  "rules": {
+   "gold": 32,
+   "extracted": 43,
+   "mapped": 33,
+   "recall": 0.844,
+   "recall_same": 0.562,
+   "precision": 0.767,
+   "duplicates": 6,
+   "kind_agree": "19/33",
+   "recall_by_source": {
+    "both": "9/11",
+    "manual": "16/19",
+    "logs": "2/2"
+   }
+  },
+  "actions": {
+   "gold": 11,
+   "candidates": 12,
+   "found": 11,
+   "missed": [],
+   "extra": [
+    "고객 사업자 유형 등록"
+   ],
+   "field_agree": {
+    "target": "9/11",
+    "roles": "9/11",
+    "actor_types": "8/11",
+    "approval": "11/11",
+    "transition": "9/11"
+   }
+  },
+  "dsl": {
+   "rounds": [
+    {
+     "valid": 6,
+     "invalid": 6
+    },
+    {
+     "valid": 12,
+     "invalid": 0
+    }
+   ],
+   "valid_matched": "11/11"
+  },
+  "behaviour": {
+   "same": 631,
+   "total": 726,
+   "rate": 0.869,
+   "can_same": 698,
+   "can_rate": 0.961,
+   "effects": "25/35",
+   "effects_actions": 5,
+   "compared": "9/11",
+   "perfect": 6
+  },
+  "tests": {
+   "draft": {
+    "tests": 32,
+    "pass": 28,
+    "fail": 0,
+    "skip": 4
+   },
+   "gold": {
+    "tests": 32,
+    "pass": 25,
+    "fail": 5,
+    "skip": 2
+   },
+   "caught": 0
+  },
+  "seconds": {
+   "qa": 326.5,
+   "dsl": 185.4
+  }
+ },
+ "pairs": [
+  [
+   "assign_accountant",
+   "assign_accountant"
+  ],
+  [
+   "update_risk_level",
+   "change_risk_level"
+  ],
+  [
+   "request_missing_documents",
+   "request_documents"
+  ],
+  [
+   "cancel_document_request",
+   "cancel_document_request"
+  ],
+  [
+   "record_document_submission",
+   "record_document_receipt"
+  ],
+  [
+   "start_review",
+   "start_tax_return_review"
+  ],
+  [
+   "return_to_collection",
+   "return_to_document_collection"
+  ],
+  [
+   "complete_filing",
+   "complete_tax_return"
+  ],
+  [
+   "file_late",
+   "process_late_filing"
+  ],
+  [
+   "escalate_inquiry",
+   "escalate_inquiry"
+  ],
+  [
+   "answer_inquiry",
+   "answer_inquiry"
+  ]
+ ],
+ "rules_detail": {
+  "gold": 32,
+  "extracted": 43,
+  "mapped": 33,
+  "recall": 0.844,
+  "recall_same": 0.562,
+  "precision": 0.767,
+  "duplicates": 6,
+  "kind_agree": "19/33",
+  "recall_by_source": {
+   "both": "9/11",
+   "manual": "16/19",
+   "logs": "2/2"
+  },
+  "missed": [
+   "R06 승인은 사람(세무사)만 하고",
+   "R08 자료 현황이 등록되지 않은 신고는 검토를 시작하지 않는다",
+   "R13 실무자는 본인 담당 고객과 그 고객의 신고·자료·업무만 본다",
+   "R14 AI 에이전트는 고객의 대표자·전화·사업자등록번호를 보지 않는다",
+   "R21 같은 업무 요청을 다시 보내면 처음 결과를 돌려주고 두 번 실행하지 않는다"
+  ],
+  "unmatched": [
+   "담당자 배정을 변경하면 완료 상태의 담당자배정 업무가 하나 남는다.",
+   "세무사, 실무자, AI비서는 자료 요청 조건을 충족하면 자료를 요청할 수 있다.",
+   "자료 요청을 보내면 해당 자료가 요청됨으로 바뀌고 담당 실무자에게 신고 기한을 업무 기한으로 하는 자료요청 업무가 하나 생긴다.",
+   "세무사와 실무자는 조건을 충족하면 잘못 보낸 자료 요청을 취소할 수 있다.",
+   "자료가 모두 들어오면 시스템이 자동으로 신고서 검토를 시작하기도 한다.",
+   "신고서 검토를 시작하면 신고가 검토중이 되고 자료요청 업무가 끝나며 담당자에게 신고서검토 업무가 생긴다.",
+   "AI비서는 휴업 또는 폐업 고객의 문의를 담당자에게 전달할 수 있다.",
+   "폐업 고객의 문의를 전달하면서 이유를 기록하고 담당자에게 고객 연락 업무를 생성한 사례가 있다.",
+   "AI비서는 일반 안내 문의에 답변할 수 있다.",
+   "AI비서가 일반 안내 문의에 답변하면 답변완료로 처리하고 답변 내용, 답변자와 답변 시각을 기록한다."
+  ],
+  "pairs": [
+   [
+    "X01",
+    "고객 담당자 배정과 변경은 세무사만 할 수 있다.",
+    "same"
+   ],
+   [
+    "R12",
+    "고객 수가 상한에 도달한 실무자에게는 고객을 배정하지 않는다.",
+    "same"
+   ],
+   [
+    "X02",
+    "현재 담당자를 다시 배정하는 것은 시스템이 막는다.",
+    "same"
+   ],
+   [
+    "R19",
+    "법인 고객은 간이과세자로 등록할 수 없다.",
+    "same"
+   ],
+   [
+    "X03",
+    "세무사는 판단에 따라 고객의 신고 지연 위험 등급을 변경할 수 있다.",
+    "partial"
+   ],
+   [
+    "X03",
+    "위험 등급을 현재와 같은 등급으로 변경하지 않는다.",
+    "partial"
+   ],
+   [
+    "X10",
+    "위험 등급을 변경할 때는 변경 이유를 남긴다.",
+    "same"
+   ],
+   [
+    "R01",
+    "자료 요청은 신고가 자료수집중일 때만 한다.",
+    "same"
+   ],
+   [
+    "R02",
+    "휴업 또는 폐업 고객에게 자료를 요청하지 않고 담당자가 상황을 확인한다.",
+    "same"
+   ],
+   [
+    "R03",
+    "아직 요청하지 않은 자료가 있을 때만 자료를 요청한다.",
+    "same"
+   ],
+   [
+    "R04",
+    "같은 신고에 진행 중인 자료요청 업무가 있으면 재요청하지 않는다.",
+    "same"
+   ],
+   [
+    "R05",
+    "AI비서가 위험 등급이 높은 고객에게 자료를 요청하면 세무사 승인 후 발송한다.",
+    "same"
+   ],
+   [
+    "X04",
+    "AI비서의 자료 요청에 대한 승인 요청은 24시간 안에 처리하지 않으면 만료된다.",
+    "partial"
+   ],
+   [
+    "X05",
+    "자료 요청 취소는 자료수집중인 신고에 요청됨 상태의 자료가 있을 때 한다.",
+    "same"
+   ],
+   [
+    "X11",
+    "자료 요청을 취소하면 자료가 미요청으로 돌아가고 진행 중인 자료요청 업무가 취소되며 취소 사유를 남긴다.",
+    "partial"
+   ],
+   [
+    "R15",
+    "세무사와 실무자는 자료 접수를 기록할 수 있지만 AI비서는 기록할 수 없다.",
+    "same"
+   ],
+   [
+    "X06",
+    "자료 접수는 신고가 자료수집중일 때만 기록한다.",
+    "same"
+   ],
+   [
+    "R07",
+    "신고서 검토는 필수 자료가 모두 제출완료 또는 해당없음으로 정리되어야 시작할 수 있다.",
+    "same"
+   ],
+   [
+    "X07",
+    "세무사는 검토 중 자료 부족을 알게 되면 신고를 자료수집 단계로 되돌릴 수 있다.",
+    "partial"
+   ],
+   [
+    "R10",
+    "신고 상태를 거꾸로 되돌리는 것은 검토중에서 자료수집중으로 되돌리는 경우만 예외적으로 허용된다.",
+    "partial"
+   ],
+   [
+    "X12",
+    "신고를 자료수집 단계로 되돌리면 이유를 남기고 진행 중인 검토 업무를 취소하며 담당자에게 고객 연락 업무를 생성한다.",
+    "partial"
+   ],
+   [
+    "R09",
+    "신고 완료 처리는 세무사만 할 수 있다.",
+    "same"
+   ],
+   [
+    "R10",
+    "신고 완료 처리는 검토중 단계를 거친 신고에 대해서만 한다.",
+    "partial"
+   ],
+   [
+    "X09",
+    "미제출 자료가 남은 신고는 완료할 수 없다.",
+    "partial"
+   ],
+   [
+    "R11",
+    "신고 기한이 지난 건은 신고완료가 아니라 기한후신고로 처리한다.",
+    "same"
+   ],
+   [
+    "R20",
+    "신고 완료 처리 시 신고가 신고완료가 되고 신고일을 기록하며 남은 신고서검토 업무를 완료한다.",
+    "partial"
+   ],
+   [
+    "X08",
+    "기한후신고 처리는 세무사만 할 수 있다.",
+    "partial"
+   ],
+   [
+    "R10",
+    "기한후신고 처리는 검토중 단계를 거친 신고에 대해서만 한다.",
+    "partial"
+   ],
+   [
+    "X08",
+    "신고 기한이 지나지 않은 건은 기한후신고로 처리하지 않는다.",
+    "partial"
+   ],
+   [
+    "R20",
+    "기한후신고 처리 시 신고가 기한후신고가 되고 신고일을 기록하며 남은 신고서검토 업무를 완료한다.",
+    "partial"
+   ],
+   [
+    "R16",
+    "AI비서는 세액이나 가산세 계산 문의를 담당자에게 전달한다.",
+    "partial"
+   ],
+   [
+    "R16",
+    "AI비서는 세액이나 가산세 계산 문의에 답하지 않는 것이 원칙이다.",
+    "same"
+   ],
+   [
+    "R17",
+    "담당자에게 넘어간 문의는 담당자가 답변하는 것이 원칙이며 세액이나 가산세 계산 문의도 담당자가 직접 답변한다.",
+    "same"
+   ]
+  ]
+ },
+ "actions_detail": [
+  {
+   "gold": "assign_accountant",
+   "draft": "assign_accountant",
+   "name": "담당자 배정",
+   "valid": true,
+   "agree": {
+    "target": true,
+    "roles": true,
+    "actor_types": true,
+    "approval": true,
+    "transition": true
+   },
+   "gold_spec": {
+    "target": "Customer",
+    "roles": [
+     "세무사"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "approval": false,
+    "transition": null,
+    "params": [
+     "accountant"
+    ]
+   },
+   "draft_spec": {
+    "target": "Customer",
+    "roles": [
+     "세무사"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "approval": false,
+    "transition": null,
+    "params": [
+     "accountant",
+     "due_date"
+    ]
+   },
+   "behaviour": {
+    "comparable": true,
+    "same": 90,
+    "can_same": 90,
+    "total": 90,
+    "rate": 1.0,
+    "diff": {},
+    "effects": {
+     "tried": 5,
+     "same": 5,
+     "examples": []
+    }
+   }
+  },
+  {
+   "gold": "update_risk_level",
+   "draft": "change_risk_level",
+   "name": "위험 등급 변경",
+   "valid": true,
+   "agree": {
+    "target": true,
+    "roles": true,
+    "actor_types": false,
+    "approval": true,
+    "transition": true
+   },
+   "gold_spec": {
+    "target": "Customer",
+    "roles": [
+     "세무사"
+    ],
+    "actor_types": [
+     "agent",
+     "human"
+    ],
+    "approval": false,
+    "transition": null,
+    "params": [
+     "level",
+     "reason"
+    ]
+   },
+   "draft_spec": {
+    "target": "Customer",
+    "roles": [
+     "세무사"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "approval": false,
+    "transition": null,
+    "params": [
+     "reason",
+     "risk_level"
+    ]
+   },
+   "behaviour": {
+    "comparable": true,
+    "same": 90,
+    "can_same": 90,
+    "total": 90,
+    "rate": 1.0,
+    "diff": {},
+    "effects": {
+     "tried": 5,
+     "same": 5,
+     "examples": []
+    }
+   }
+  },
+  {
+   "gold": "request_missing_documents",
+   "draft": "request_documents",
+   "name": "자료 요청",
+   "valid": true,
+   "agree": {
+    "target": false,
+    "roles": true,
+    "actor_types": true,
+    "approval": true,
+    "transition": false
+   },
+   "gold_spec": {
+    "target": "TaxReturn",
+    "roles": [
+     "AI비서",
+     "세무사",
+     "실무자"
+    ],
+    "actor_types": [
+     "agent",
+     "human"
+    ],
+    "approval": true,
+    "transition": null,
+    "params": [
+     "note"
+    ]
+   },
+   "draft_spec": {
+    "target": "DocumentSubmission",
+    "roles": [
+     "AI비서",
+     "세무사",
+     "실무자"
+    ],
+    "actor_types": [
+     "agent",
+     "human"
+    ],
+    "approval": true,
+    "transition": {
+     "from": [
+      "미요청"
+     ],
+     "to": "요청됨"
+    },
+    "params": []
+   },
+   "behaviour": {
+    "comparable": false,
+    "same": 0,
+    "total": 0,
+    "rate": null,
+    "diff": {
+     "대상이 다름: 정답 TaxReturn / 초안 DocumentSubmission": 1
+    }
+   }
+  },
+  {
+   "gold": "cancel_document_request",
+   "draft": "cancel_document_request",
+   "name": "자료 요청 취소",
+   "valid": true,
+   "agree": {
+    "target": false,
+    "roles": true,
+    "actor_types": true,
+    "approval": true,
+    "transition": false
+   },
+   "gold_spec": {
+    "target": "TaxReturn",
+    "roles": [
+     "세무사",
+     "실무자"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "approval": false,
+    "transition": null,
+    "params": [
+     "reason"
+    ]
+   },
+   "draft_spec": {
+    "target": "DocumentSubmission",
+    "roles": [
+     "세무사",
+     "실무자"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "approval": false,
+    "transition": {
+     "from": [
+      "요청됨"
+     ],
+     "to": "미요청"
+    },
+    "params": [
+     "reason"
+    ]
+   },
+   "behaviour": {
+    "comparable": false,
+    "same": 0,
+    "total": 0,
+    "rate": null,
+    "diff": {
+     "대상이 다름: 정답 TaxReturn / 초안 DocumentSubmission": 1
+    }
+   }
+  },
+  {
+   "gold": "record_document_submission",
+   "draft": "record_document_receipt",
+   "name": "자료 접수 기록",
+   "valid": true,
+   "agree": {
+    "target": true,
+    "roles": true,
+    "actor_types": true,
+    "approval": true,
+    "transition": true
+   },
+   "gold_spec": {
+    "target": "DocumentSubmission",
+    "roles": [
+     "세무사",
+     "실무자"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "approval": false,
+    "transition": {
+     "from": [
+      "미요청",
+      "요청됨"
+     ],
+     "to": "제출완료"
+    },
+    "params": []
+   },
+   "draft_spec": {
+    "target": "DocumentSubmission",
+    "roles": [
+     "세무사",
+     "실무자"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "approval": false,
+    "transition": {
+     "from": [
+      "미요청",
+      "요청됨"
+     ],
+     "to": "제출완료"
+    },
+    "params": []
+   },
+   "behaviour": {
+    "comparable": true,
+    "same": 90,
+    "can_same": 90,
+    "total": 90,
+    "rate": 1.0,
+    "diff": {},
+    "effects": {
+     "tried": 5,
+     "same": 5,
+     "examples": []
+    }
+   }
+  },
+  {
+   "gold": "start_review",
+   "draft": "start_tax_return_review",
+   "name": "신고서 검토 시작",
+   "valid": true,
+   "agree": {
+    "target": true,
+    "roles": false,
+    "actor_types": false,
+    "approval": true,
+    "transition": true
+   },
+   "gold_spec": {
+    "target": "TaxReturn",
+    "roles": [
+     "AI비서",
+     "세무사",
+     "시스템",
+     "실무자"
+    ],
+    "actor_types": [
+     "agent",
+     "human",
+     "system"
+    ],
+    "approval": false,
+    "transition": {
+     "from": [
+      "자료수집중"
+     ],
+     "to": "검토중"
+    },
+    "params": []
+   },
+   "draft_spec": {
+    "target": "TaxReturn",
+    "roles": [
+     "시스템"
+    ],
+    "actor_types": [
+     "system"
+    ],
+    "approval": false,
+    "transition": {
+     "from": [
+      "자료수집중"
+     ],
+     "to": "검토중"
+    },
+    "params": [
+     "due_date"
+    ]
+   },
+   "behaviour": {
+    "comparable": true,
+    "same": 23,
+    "can_same": 90,
+    "total": 90,
+    "rate": 0.256,
+    "diff": {
+     "세무사: 정답 rejected / 초안 denied": 30,
+     "AI비서: 정답 rejected / 초안 denied": 30,
+     "실무자: 정답 rejected / 초안 denied": 7
+    },
+    "effects": {
+     "tried": 0,
+     "same": 0,
+     "examples": []
+    }
+   }
+  },
+  {
+   "gold": "return_to_collection",
+   "draft": "return_to_document_collection",
+   "name": "신고 자료수집 단계 복귀",
+   "valid": true,
+   "agree": {
+    "target": true,
+    "roles": true,
+    "actor_types": true,
+    "approval": true,
+    "transition": true
+   },
+   "gold_spec": {
+    "target": "TaxReturn",
+    "roles": [
+     "세무사"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "approval": false,
+    "transition": {
+     "from": [
+      "검토중"
+     ],
+     "to": "자료수집중"
+    },
+    "params": [
+     "reason"
+    ]
+   },
+   "draft_spec": {
+    "target": "TaxReturn",
+    "roles": [
+     "세무사"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "approval": false,
+    "transition": {
+     "from": [
+      "검토중"
+     ],
+     "to": "자료수집중"
+    },
+    "params": [
+     "due_date",
+     "reason"
+    ]
+   },
+   "behaviour": {
+    "comparable": true,
+    "same": 90,
+    "can_same": 90,
+    "total": 90,
+    "rate": 1.0,
+    "diff": {},
+    "effects": {
+     "tried": 5,
+     "same": 0,
+     "examples": [
+      {
+       "target": "R00307",
+       "actor": "세무사",
+       "draft_status": "completed",
+       "only_gold": [
+        "('create', 'Task', (('assignee_id', 'A003'), ('created_by', 'human'), ('customer_id', 'C0107'), ('due_date', '2027-01-25'), ('note', '테스트'), ('return_id', 'R00307'), ('status', '대기'), ('task_type', '고객연락')))",
+        "('update', 'Task', 'T00276', 'status', '취소')"
+       ],
+       "only_draft": [
+        "('create', 'Task', (('assignee_id', 'A003'), ('created_by', 'human'), ('customer_id', 'C0107'), ('due_date', '2027-01-18'), ('note', '테스트'), ('return_id', 'R00307'), ('status', '대기'), ('task_type', '고객연락')))"
+       ]
+      },
+      {
+       "target": "R00397",
+       "actor": "세무사",
+       "draft_status": "completed",
+       "only_gold": [
+        "('create', 'Task', (('assignee_id', 'A006'), ('created_by', 'human'), ('customer_id', 'C0139'), ('due_date', '2027-01-25'), ('note', '테스트'), ('return_id', 'R00397'), ('status', '대기'), ('task_type', '고객연락')))"
+       ],
+       "only_draft": [
+        "('create', 'Task', (('assignee_id', 'A006'), ('created_by', 'human'), ('customer_id', 'C0139'), ('due_date', '2027-01-18'), ('note', '테스트'), ('return_id', 'R00397'), ('status', '대기'), ('task_type', '고객연락')))"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "gold": "complete_filing",
+   "draft": "complete_tax_return",
+   "name": "신고 완료 처리",
+   "valid": true,
+   "agree": {
+    "target": true,
+    "roles": true,
+    "actor_types": true,
+    "approval": true,
+    "transition": true
+   },
+   "gold_spec": {
+    "target": "TaxReturn",
+    "roles": [
+     "세무사"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "approval": false,
+    "transition": {
+     "from": [
+      "검토중"
+     ],
+     "to": "신고완료"
+    },
+    "params": []
+   },
+   "draft_spec": {
+    "target": "TaxReturn",
+    "roles": [
+     "세무사"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "approval": false,
+    "transition": {
+     "from": [
+      "검토중"
+     ],
+     "to": "신고완료"
+    },
+    "params": []
+   },
+   "behaviour": {
+    "comparable": true,
+    "same": 90,
+    "can_same": 90,
+    "total": 90,
+    "rate": 1.0,
+    "diff": {},
+    "effects": {
+     "tried": 5,
+     "same": 5,
+     "examples": []
+    }
+   }
+  },
+  {
+   "gold": "file_late",
+   "draft": "process_late_filing",
+   "name": "기한후신고 처리",
+   "valid": true,
+   "agree": {
+    "target": true,
+    "roles": true,
+    "actor_types": true,
+    "approval": true,
+    "transition": true
+   },
+   "gold_spec": {
+    "target": "TaxReturn",
+    "roles": [
+     "세무사"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "approval": false,
+    "transition": {
+     "from": [
+      "검토중"
+     ],
+     "to": "기한후신고"
+    },
+    "params": []
+   },
+   "draft_spec": {
+    "target": "TaxReturn",
+    "roles": [
+     "세무사"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "approval": false,
+    "transition": {
+     "from": [
+      "검토중"
+     ],
+     "to": "기한후신고"
+    },
+    "params": []
+   },
+   "behaviour": {
+    "comparable": true,
+    "same": 90,
+    "can_same": 90,
+    "total": 90,
+    "rate": 1.0,
+    "diff": {},
+    "effects": {
+     "tried": 0,
+     "same": 0,
+     "examples": []
+    }
+   }
+  },
+  {
+   "gold": "escalate_inquiry",
+   "draft": "escalate_inquiry",
+   "name": "문의 전달",
+   "valid": true,
+   "agree": {
+    "target": true,
+    "roles": false,
+    "actor_types": false,
+    "approval": true,
+    "transition": true
+   },
+   "gold_spec": {
+    "target": "Inquiry",
+    "roles": [
+     "AI비서",
+     "세무사",
+     "실무자"
+    ],
+    "actor_types": [
+     "agent",
+     "human"
+    ],
+    "approval": false,
+    "transition": {
+     "from": [
+      "접수"
+     ],
+     "to": "담당자확인"
+    },
+    "params": [
+     "reason"
+    ]
+   },
+   "draft_spec": {
+    "target": "Inquiry",
+    "roles": [
+     "AI비서"
+    ],
+    "actor_types": [
+     "agent"
+    ],
+    "approval": false,
+    "transition": {
+     "from": [
+      "접수"
+     ],
+     "to": "담당자확인"
+    },
+    "params": []
+   },
+   "behaviour": {
+    "comparable": true,
+    "same": 22,
+    "can_same": 22,
+    "total": 48,
+    "rate": 0.458,
+    "diff": {
+     "세무사: 정답 ready / 초안 denied": 16,
+     "실무자: 정답 ready / 초안 denied": 10
+    },
+    "effects": {
+     "tried": 5,
+     "same": 0,
+     "examples": [
+      {
+       "target": "Q00001",
+       "actor": "세무사",
+       "draft_status": "denied",
+       "only_gold": [
+        "('create', 'Task', (('assignee_id', 'A004'), ('created_by', 'human'), ('customer_id', 'C0002'), ('due_date', '2027-01-18'), ('note', '테스트'), ('status', '대기'), ('task_type', '고객연락')))",
+        "('update', 'Inquiry', 'Q00001', 'escalation', '테스트')",
+        "('update', 'Inquiry', 'Q00001', 'status', '담당자확인')"
+       ],
+       "only_draft": []
+      },
+      {
+       "target": "Q00002",
+       "actor": "세무사",
+       "draft_status": "denied",
+       "only_gold": [
+        "('create', 'Task', (('assignee_id', 'A003'), ('created_by', 'human'), ('customer_id', 'C0004'), ('due_date', '2027-01-18'), ('note', '테스트'), ('status', '대기'), ('task_type', '고객연락')))",
+        "('update', 'Inquiry', 'Q00002', 'escalation', '테스트')",
+        "('update', 'Inquiry', 'Q00002', 'status', '담당자확인')"
+       ],
+       "only_draft": []
+      }
+     ]
+    }
+   }
+  },
+  {
+   "gold": "answer_inquiry",
+   "draft": "answer_inquiry",
+   "name": "문의 답변",
+   "valid": true,
+   "agree": {
+    "target": true,
+    "roles": true,
+    "actor_types": true,
+    "approval": true,
+    "transition": true
+   },
+   "gold_spec": {
+    "target": "Inquiry",
+    "roles": [
+     "AI비서",
+     "세무사",
+     "실무자"
+    ],
+    "actor_types": [
+     "agent",
+     "human"
+    ],
+    "approval": false,
+    "transition": {
+     "from": [
+      "담당자확인",
+      "접수"
+     ],
+     "to": "답변완료"
+    },
+    "params": [
+     "answer"
+    ]
+   },
+   "draft_spec": {
+    "target": "Inquiry",
+    "roles": [
+     "AI비서",
+     "세무사",
+     "실무자"
+    ],
+    "actor_types": [
+     "agent",
+     "human"
+    ],
+    "approval": false,
+    "transition": {
+     "from": [
+      "담당자확인",
+      "접수"
+     ],
+     "to": "답변완료"
+    },
+    "params": [
+     "answer"
+    ]
+   },
+   "behaviour": {
+    "comparable": true,
+    "same": 46,
+    "can_same": 46,
+    "total": 48,
+    "rate": 0.958,
+    "diff": {
+     "세무사: 정답 ready / 초안 rejected": 2
+    },
+    "effects": {
+     "tried": 5,
+     "same": 5,
+     "examples": []
+    }
+   }
+  }
+ ],
+ "errors": {},
+ "merged": {
+  "rules": [
+   {
+    "statement": "고객 담당자 배정과 변경은 세무사만 할 수 있다.",
+    "kind": "권한",
+    "action": "담당자 배정",
+    "qa": [
+     "Q001",
+     "Q002",
+     "Q003",
+     "Q124",
+     "Q125",
+     "Q126",
+     "Q127"
+    ],
+    "source": "both",
+    "evidence": "Q001, Q002, Q003, Q124, Q125, Q126, Q127"
+   },
+   {
+    "statement": "고객 수가 상한에 도달한 실무자에게는 고객을 배정하지 않는다.",
+    "kind": "실행조건",
+    "action": "담당자 배정",
+    "qa": [
+     "Q001",
+     "Q004"
+    ],
+    "source": "manual",
+    "evidence": "Q001, Q004"
+   },
+   {
+    "statement": "현재 담당자를 다시 배정하는 것은 시스템이 막는다.",
+    "kind": "멱등",
+    "action": "담당자 배정",
+    "qa": [
+     "Q005"
+    ],
+    "source": "manual",
+    "evidence": "Q005"
+   },
+   {
+    "statement": "담당자 배정을 변경하면 완료 상태의 담당자배정 업무가 하나 남는다.",
+    "kind": "정책",
+    "action": "담당자 배정",
+    "qa": [
+     "Q007"
+    ],
+    "source": "manual",
+    "evidence": "Q007"
+   },
+   {
+    "statement": "법인 고객은 간이과세자로 등록할 수 없다.",
+    "kind": "정책",
+    "action": "고객 사업자 유형 등록",
+    "qa": [
+     "Q011"
+    ],
+    "source": "manual",
+    "evidence": "Q011"
+   },
+   {
+    "statement": "세무사는 판단에 따라 고객의 신고 지연 위험 등급을 변경할 수 있다.",
+    "kind": "권한",
+    "action": "위험 등급 변경",
+    "qa": [
+     "Q014"
+    ],
+    "source": "manual",
+    "evidence": "Q014"
+   },
+   {
+    "statement": "위험 등급을 현재와 같은 등급으로 변경하지 않는다.",
+    "kind": "멱등",
+    "action": "위험 등급 변경",
+    "qa": [
+     "Q017"
+    ],
+    "source": "manual",
+    "evidence": "Q017"
+   },
+   {
+    "statement": "위험 등급을 변경할 때는 변경 이유를 남긴다.",
+    "kind": "정책",
+    "action": "위험 등급 변경",
+    "qa": [
+     "Q014",
+     "Q019"
+    ],
+    "source": "manual",
+    "evidence": "Q014, Q019"
+   },
+   {
+    "statement": "세무사, 실무자, AI비서는 자료 요청 조건을 충족하면 자료를 요청할 수 있다.",
+    "kind": "권한",
+    "action": "자료 요청",
+    "qa": [
+     "Q020",
+     "Q021",
+     "Q022"
+    ],
+    "source": "manual",
+    "evidence": "Q020, Q021, Q022"
+   },
+   {
+    "statement": "자료 요청은 신고가 자료수집중일 때만 한다.",
+    "kind": "실행조건",
+    "action": "자료 요청",
+    "qa": [
+     "Q020",
+     "Q021",
+     "Q023",
+     "Q024",
+     "Q025"
+    ],
+    "source": "manual",
+    "evidence": "Q020, Q021, Q023, Q024, Q025"
+   },
+   {
+    "statement": "휴업 또는 폐업 고객에게 자료를 요청하지 않고 담당자가 상황을 확인한다.",
+    "kind": "실행조건",
+    "action": "자료 요청",
+    "qa": [
+     "Q026",
+     "Q027",
+     "Q099",
+     "Q100"
+    ],
+    "source": "both",
+    "evidence": "Q026, Q027, Q099, Q100"
+   },
+   {
+    "statement": "아직 요청하지 않은 자료가 있을 때만 자료를 요청한다.",
+    "kind": "실행조건",
+    "action": "자료 요청",
+    "qa": [
+     "Q028"
+    ],
+    "source": "manual",
+    "evidence": "Q028"
+   },
+   {
+    "statement": "같은 신고에 진행 중인 자료요청 업무가 있으면 재요청하지 않는다.",
+    "kind": "멱등",
+    "action": "자료 요청",
+    "qa": [
+     "Q029",
+     "Q101"
+    ],
+    "source": "both",
+    "evidence": "Q029, Q101"
+   },
+   {
+    "statement": "AI비서가 위험 등급이 높은 고객에게 자료를 요청하면 세무사 승인 후 발송한다.",
+    "kind": "승인",
+    "action": "자료 요청",
+    "qa": [
+     "Q022",
+     "Q030",
+     "Q098",
+     "Q104",
+     "Q105"
+    ],
+    "source": "both",
+    "evidence": "Q022, Q030, Q098, Q104, Q105"
+   },
+   {
+    "statement": "AI비서의 자료 요청에 대한 승인 요청은 24시간 안에 처리하지 않으면 만료된다.",
+    "kind": "승인",
+    "action": "자료 요청",
+    "qa": [
+     "Q031"
+    ],
+    "source": "manual",
+    "evidence": "Q031"
+   },
+   {
+    "statement": "자료 요청을 보내면 해당 자료가 요청됨으로 바뀌고 담당 실무자에게 신고 기한을 업무 기한으로 하는 자료요청 업무가 하나 생긴다.",
+    "kind": "상태전이",
+    "action": "자료 요청",
+    "qa": [
+     "Q034"
+    ],
+    "source": "manual",
+    "evidence": "Q034"
+   },
+   {
+    "statement": "세무사와 실무자는 조건을 충족하면 잘못 보낸 자료 요청을 취소할 수 있다.",
+    "kind": "권한",
+    "action": "자료 요청 취소",
+    "qa": [
+     "Q035",
+     "Q036"
+    ],
+    "source": "manual",
+    "evidence": "Q035, Q036"
+   },
+   {
+    "statement": "자료 요청 취소는 자료수집중인 신고에 요청됨 상태의 자료가 있을 때 한다.",
+    "kind": "실행조건",
+    "action": "자료 요청 취소",
+    "qa": [
+     "Q035",
+     "Q036",
+     "Q038",
+     "Q039"
+    ],
+    "source": "manual",
+    "evidence": "Q035, Q036, Q038, Q039"
+   },
+   {
+    "statement": "자료 요청을 취소하면 자료가 미요청으로 돌아가고 진행 중인 자료요청 업무가 취소되며 취소 사유를 남긴다.",
+    "kind": "상태전이",
+    "action": "자료 요청 취소",
+    "qa": [
+     "Q035",
+     "Q036",
+     "Q041"
+    ],
+    "source": "manual",
+    "evidence": "Q035, Q036, Q041"
+   },
+   {
+    "statement": "세무사와 실무자는 자료 접수를 기록할 수 있지만 AI비서는 기록할 수 없다.",
+    "kind": "권한",
+    "action": "자료 접수 기록",
+    "qa": [
+     "Q042",
+     "Q043",
+     "Q044"
+    ],
+    "source": "manual",
+    "evidence": "Q042, Q043, Q044"
+   },
+   {
+    "statement": "자료 접수는 신고가 자료수집중일 때만 기록한다.",
+    "kind": "실행조건",
+    "action": "자료 접수 기록",
+    "qa": [
+     "Q042",
+     "Q043",
+     "Q045"
+    ],
+    "source": "manual",
+    "evidence": "Q042, Q043, Q045"
+   },
+   {
+    "statement": "자료가 모두 들어오면 시스템이 자동으로 신고서 검토를 시작하기도 한다.",
+    "kind": "권한",
+    "action": "신고서 검토 시작",
+    "qa": [
+     "Q051"
+    ],
+    "source": "manual",
+    "evidence": "Q051"
+   },
+   {
+    "statement": "신고서 검토는 필수 자료가 모두 제출완료 또는 해당없음으로 정리되어야 시작할 수 있다.",
+    "kind": "실행조건",
+    "action": "신고서 검토 시작",
+    "qa": [
+     "Q052",
+     "Q053",
+     "Q054",
+     "Q055"
+    ],
+    "source": "manual",
+    "evidence": "Q052, Q053, Q054, Q055"
+   },
+   {
+    "statement": "신고서 검토를 시작하면 신고가 검토중이 되고 자료요청 업무가 끝나며 담당자에게 신고서검토 업무가 생긴다.",
+    "kind": "상태전이",
+    "action": "신고서 검토 시작",
+    "qa": [
+     "Q057"
+    ],
+    "source": "manual",
+    "evidence": "Q057"
+   },
+   {
+    "statement": "세무사는 검토 중 자료 부족을 알게 되면 신고를 자료수집 단계로 되돌릴 수 있다.",
+    "kind": "권한",
+    "action": "신고 자료수집 단계 복귀",
+    "qa": [
+     "Q058",
+     "Q106"
+    ],
+    "source": "both",
+    "evidence": "Q058, Q106"
+   },
+   {
+    "statement": "신고 상태를 거꾸로 되돌리는 것은 검토중에서 자료수집중으로 되돌리는 경우만 예외적으로 허용된다.",
+    "kind": "상태전이",
+    "action": "신고 자료수집 단계 복귀",
+    "qa": [
+     "Q058",
+     "Q062"
+    ],
+    "source": "manual",
+    "evidence": "Q058, Q062"
+   },
+   {
+    "statement": "신고를 자료수집 단계로 되돌리면 이유를 남기고 진행 중인 검토 업무를 취소하며 담당자에게 고객 연락 업무를 생성한다.",
+    "kind": "상태전이",
+    "action": "신고 자료수집 단계 복귀",
+    "qa": [
+     "Q064",
+     "Q111"
+    ],
+    "source": "both",
+    "evidence": "Q064, Q111"
+   },
+   {
+    "statement": "신고 완료 처리는 세무사만 할 수 있다.",
+    "kind": "권한",
+    "action": "신고 완료 처리",
+    "qa": [
+     "Q065",
+     "Q066",
+     "Q067",
+     "Q068"
+    ],
+    "source": "manual",
+    "evidence": "Q065, Q066, Q067, Q068"
+   },
+   {
+    "statement": "신고 완료 처리는 검토중 단계를 거친 신고에 대해서만 한다.",
+    "kind": "상태전이",
+    "action": "신고 완료 처리",
+    "qa": [
+     "Q069"
+    ],
+    "source": "manual",
+    "evidence": "Q069"
+   },
+   {
+    "statement": "미제출 자료가 남은 신고는 완료할 수 없다.",
+    "kind": "실행조건",
+    "action": "신고 완료 처리",
+    "qa": [
+     "Q070"
+    ],
+    "source": "manual",
+    "evidence": "Q070"
+   },
+   {
+    "statement": "신고 기한이 지난 건은 신고완료가 아니라 기한후신고로 처리한다.",
+    "kind": "실행조건",
+    "action": "신고 완료 처리",
+    "qa": [
+     "Q071",
+     "Q118",
+     "Q123"
+    ],
+    "source": "both",
+    "evidence": "Q071, Q118, Q123"
+   },
+   {
+    "statement": "신고 완료 처리 시 신고가 신고완료가 되고 신고일을 기록하며 남은 신고서검토 업무를 완료한다.",
+    "kind": "상태전이",
+    "action": "신고 완료 처리",
+    "qa": [
+     "Q073"
+    ],
+    "source": "manual",
+    "evidence": "Q073"
+   },
+   {
+    "statement": "기한후신고 처리는 세무사만 할 수 있다.",
+    "kind": "권한",
+    "action": "기한후신고 처리",
+    "qa": [
+     "Q074",
+     "Q075",
+     "Q076",
+     "Q077"
+    ],
+    "source": "manual",
+    "evidence": "Q074, Q075, Q076, Q077"
+   },
+   {
+    "statement": "기한후신고 처리는 검토중 단계를 거친 신고에 대해서만 한다.",
+    "kind": "상태전이",
+    "action": "기한후신고 처리",
+    "qa": [
+     "Q078"
+    ],
+    "source": "manual",
+    "evidence": "Q078"
+   },
+   {
+    "statement": "신고 기한이 지나지 않은 건은 기한후신고로 처리하지 않는다.",
+    "kind": "실행조건",
+    "action": "기한후신고 처리",
+    "qa": [
+     "Q079"
+    ],
+    "source": "manual",
+    "evidence": "Q079"
+   },
+   {
+    "statement": "기한후신고 처리 시 신고가 기한후신고가 되고 신고일을 기록하며 남은 신고서검토 업무를 완료한다.",
+    "kind": "상태전이",
+    "action": "기한후신고 처리",
+    "qa": [
+     "Q081"
+    ],
+    "source": "manual",
+    "evidence": "Q081"
+   },
+   {
+    "statement": "AI비서는 휴업 또는 폐업 고객의 문의를 담당자에게 전달할 수 있다.",
+    "kind": "권한",
+    "action": "문의 전달",
+    "qa": [
+     "Q082",
+     "Q083"
+    ],
+    "source": "logs",
+    "evidence": "Q082, Q083"
+   },
+   {
+    "statement": "AI비서는 세액이나 가산세 계산 문의를 담당자에게 전달한다.",
+    "kind": "정책",
+    "action": "문의 전달",
+    "qa": [
+     "Q084"
+    ],
+    "source": "logs",
+    "evidence": "Q084"
+   },
+   {
+    "statement": "폐업 고객의 문의를 전달하면서 이유를 기록하고 담당자에게 고객 연락 업무를 생성한 사례가 있다.",
+    "kind": "정책",
+    "action": "문의 전달",
+    "qa": [
+     "Q089",
+     "Q112",
+     "Q117"
+    ],
+    "source": "logs",
+    "evidence": "Q089, Q112, Q117"
+   },
+   {
+    "statement": "AI비서는 일반 안내 문의에 답변할 수 있다.",
+    "kind": "권한",
+    "action": "문의 답변",
+    "qa": [
+     "Q090"
+    ],
+    "source": "logs",
+    "evidence": "Q090"
+   },
+   {
+    "statement": "AI비서는 세액이나 가산세 계산 문의에 답하지 않는 것이 원칙이다.",
+    "kind": "정책",
+    "action": "문의 답변",
+    "qa": [
+     "Q091"
+    ],
+    "source": "logs",
+    "evidence": "Q091"
+   },
+   {
+    "statement": "담당자에게 넘어간 문의는 담당자가 답변하는 것이 원칙이며 세액이나 가산세 계산 문의도 담당자가 직접 답변한다.",
+    "kind": "정책",
+    "action": "문의 답변",
+    "qa": [
+     "Q092",
+     "Q093",
+     "Q094"
+    ],
+    "source": "logs",
+    "evidence": "Q092, Q093, Q094"
+   },
+   {
+    "statement": "AI비서가 일반 안내 문의에 답변하면 답변완료로 처리하고 답변 내용, 답변자와 답변 시각을 기록한다.",
+    "kind": "상태전이",
+    "action": "문의 답변",
+    "qa": [
+     "Q090",
+     "Q097"
+    ],
+    "source": "logs",
+    "evidence": "Q090, Q097"
+   }
+  ],
+  "actions": [
+   {
+    "name": "담당자 배정",
+    "target": "Customer",
+    "description": "고객의 담당자를 배정하거나 변경한다.",
+    "roles": [
+     "세무사"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "preconditions": [
+     "배정받는 실무자는 {function: has_capacity, args: {accountant: 배정받는 담당자}}가 true여야 한다.",
+     "배정받는 담당자는 현재 담당자와 달라야 한다."
+    ],
+    "approval": null,
+    "transition": null,
+    "effects": [
+     "고객의 담당자 배정이 바뀐다.",
+     "담당자 배정을 변경하면 완료 상태의 담당자배정 업무가 하나 남는다."
+    ],
+    "qa": [
+     "Q001",
+     "Q002",
+     "Q003",
+     "Q004",
+     "Q005",
+     "Q007",
+     "Q124",
+     "Q125",
+     "Q126",
+     "Q127"
+    ],
+    "source": "both"
+   },
+   {
+    "name": "고객 사업자 유형 등록",
+    "target": "Customer",
+    "description": "고객의 사업자 유형을 등록한다.",
+    "roles": [],
+    "actor_types": [],
+    "preconditions": [
+     "법인 고객을 간이과세자로 등록할 수 없다."
+    ],
+    "approval": null,
+    "transition": null,
+    "effects": [
+     "고객의 사업자 유형을 등록한다."
+    ],
+    "qa": [
+     "Q011"
+    ],
+    "source": "manual"
+   },
+   {
+    "name": "위험 등급 변경",
+    "target": "Customer",
+    "description": "고객의 신고 지연 위험 등급을 변경한다.",
+    "roles": [
+     "세무사"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "preconditions": [
+     "변경할 등급은 현재 등급과 달라야 한다."
+    ],
+    "approval": null,
+    "transition": null,
+    "effects": [
+     "고객의 위험 등급을 변경한다.",
+     "변경 이유를 남긴다."
+    ],
+    "qa": [
+     "Q014",
+     "Q017",
+     "Q019"
+    ],
+    "source": "manual"
+   },
+   {
+    "name": "자료 요청",
+    "target": "DocumentSubmission",
+    "description": "신고에 필요한 미요청 자료를 고객에게 요청한다.",
+    "roles": [
+     "세무사",
+     "실무자",
+     "AI비서"
+    ],
+    "actor_types": [
+     "human",
+     "agent"
+    ],
+    "preconditions": [
+     "신고가 자료수집중이어야 한다.",
+     "고객이 휴업 또는 폐업 상태가 아니어야 한다.",
+     "미요청 자료가 있어야 한다.",
+     "같은 신고에 진행 중인 자료요청 업무가 없어야 한다."
+    ],
+    "approval": "AI비서가 위험 등급이 높은 고객에게 요청할 때는 세무사 승인 후 발송하며, 승인 요청은 24시간 안에 처리하지 않으면 만료된다.",
+    "transition": {
+     "from": [
+      "미요청"
+     ],
+     "to": "요청됨"
+    },
+    "effects": [
+     "해당 자료가 요청됨으로 바뀐다.",
+     "담당 실무자에게 자료요청 업무가 하나 생기며 업무 기한은 신고 기한과 같다."
+    ],
+    "qa": [
+     "Q020",
+     "Q021",
+     "Q022",
+     "Q023",
+     "Q024",
+     "Q025",
+     "Q026",
+     "Q027",
+     "Q028",
+     "Q029",
+     "Q030",
+     "Q031",
+     "Q034",
+     "Q098",
+     "Q099",
+     "Q100",
+     "Q101",
+     "Q104",
+     "Q105"
+    ],
+    "source": "both"
+   },
+   {
+    "name": "자료 요청 취소",
+    "target": "DocumentSubmission",
+    "description": "잘못 보낸 자료 요청을 취소한다.",
+    "roles": [
+     "세무사",
+     "실무자"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "preconditions": [
+     "신고가 자료수집중이어야 한다.",
+     "요청됨 상태의 자료가 있어야 한다.",
+     "취소 사유를 남겨야 한다."
+    ],
+    "approval": null,
+    "transition": {
+     "from": [
+      "요청됨"
+     ],
+     "to": "미요청"
+    },
+    "effects": [
+     "자료가 미요청으로 돌아간다.",
+     "진행 중이던 자료요청 업무가 취소된다.",
+     "취소 사유를 남긴다."
+    ],
+    "qa": [
+     "Q035",
+     "Q036",
+     "Q038",
+     "Q039",
+     "Q041"
+    ],
+    "source": "manual"
+   },
+   {
+    "name": "자료 접수 기록",
+    "target": "DocumentSubmission",
+    "description": "고객이 보낸 자료의 접수를 기록한다.",
+    "roles": [
+     "세무사",
+     "실무자"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "preconditions": [
+     "신고가 자료수집중이어야 한다."
+    ],
+    "approval": null,
+    "transition": null,
+    "effects": [
+     "자료 접수를 기록한다."
+    ],
+    "qa": [
+     "Q042",
+     "Q043",
+     "Q044",
+     "Q045"
+    ],
+    "source": "manual"
+   },
+   {
+    "name": "신고서 검토 시작",
+    "target": "TaxReturn",
+    "description": "필수 자료가 정리된 신고의 검토를 시작한다.",
+    "roles": [
+     "시스템"
+    ],
+    "actor_types": [
+     "system"
+    ],
+    "preconditions": [
+     "필수 자료가 모두 제출완료 또는 해당없음으로 정리되어야 한다.",
+     "자료 현황이 아예 등록되지 않은 신고가 아니어야 한다."
+    ],
+    "approval": null,
+    "transition": {
+     "from": [
+      "자료수집중"
+     ],
+     "to": "검토중"
+    },
+    "effects": [
+     "신고가 검토중이 된다.",
+     "자료요청 업무가 끝난다.",
+     "담당자에게 신고서검토 업무가 생긴다."
+    ],
+    "qa": [
+     "Q051",
+     "Q052",
+     "Q053",
+     "Q054",
+     "Q055",
+     "Q057"
+    ],
+    "source": "manual"
+   },
+   {
+    "name": "신고 자료수집 단계 복귀",
+    "target": "TaxReturn",
+    "description": "검토 중 자료 부족이 발견된 신고를 자료수집 단계로 되돌린다.",
+    "roles": [
+     "세무사"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "preconditions": [
+     "신고가 검토중이어야 한다.",
+     "검토 중 자료 부족을 알게 된 경우다."
+    ],
+    "approval": null,
+    "transition": {
+     "from": [
+      "검토중"
+     ],
+     "to": "자료수집중"
+    },
+    "effects": [
+     "신고가 자료수집중으로 돌아간다.",
+     "되돌린 이유를 남긴다.",
+     "진행 중이던 검토 업무를 취소한다.",
+     "담당자에게 고객 연락 업무가 생긴다."
+    ],
+    "qa": [
+     "Q058",
+     "Q062",
+     "Q064",
+     "Q106",
+     "Q111"
+    ],
+    "source": "both"
+   },
+   {
+    "name": "신고 완료 처리",
+    "target": "TaxReturn",
+    "description": "기한이 지나지 않은 신고를 완료 처리한다.",
+    "roles": [
+     "세무사"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "preconditions": [
+     "신고가 검토중이어야 한다.",
+     "{function: missing_documents, args: {tax_return: 대상 신고}}의 결과가 비어 있어야 한다.",
+     "신고 기한이 지나지 않아야 한다."
+    ],
+    "approval": null,
+    "transition": {
+     "from": [
+      "검토중"
+     ],
+     "to": "신고완료"
+    },
+    "effects": [
+     "신고가 신고완료가 된다.",
+     "신고일을 기록한다.",
+     "남아 있던 신고서검토 업무를 완료한다."
+    ],
+    "qa": [
+     "Q065",
+     "Q066",
+     "Q067",
+     "Q068",
+     "Q069",
+     "Q070",
+     "Q071",
+     "Q073",
+     "Q118",
+     "Q123"
+    ],
+    "source": "both"
+   },
+   {
+    "name": "기한후신고 처리",
+    "target": "TaxReturn",
+    "description": "신고 기한이 지난 신고를 기한후신고로 처리한다.",
+    "roles": [
+     "세무사"
+    ],
+    "actor_types": [
+     "human"
+    ],
+    "preconditions": [
+     "신고가 검토중이어야 한다.",
+     "신고 기한이 지나야 한다."
+    ],
+    "approval": null,
+    "transition": {
+     "from": [
+      "검토중"
+     ],
+     "to": "기한후신고"
+    },
+    "effects": [
+     "신고가 기한후신고가 된다.",
+     "신고일을 기록한다.",
+     "남아 있던 신고서검토 업무를 완료한다."
+    ],
+    "qa": [
+     "Q071",
+     "Q074",
+     "Q075",
+     "Q076",
+     "Q077",
+     "Q078",
+     "Q079",
+     "Q081",
+     "Q118",
+     "Q123"
+    ],
+    "source": "both"
+   },
+   {
+    "name": "문의 전달",
+    "target": "Inquiry",
+    "description": "고객 문의를 담당자에게 전달한다.",
+    "roles": [
+     "AI비서"
+    ],
+    "actor_types": [
+     "agent"
+    ],
+    "preconditions": [],
+    "approval": null,
+    "transition": null,
+    "effects": [
+     "문의를 담당자에게 전달한다.",
+     "폐업 고객 문의 전달 시 이유를 기록하고 담당자에게 고객 연락 업무를 생성한 사례가 있다."
+    ],
+    "qa": [
+     "Q082",
+     "Q083",
+     "Q084",
+     "Q089",
+     "Q112",
+     "Q117"
+    ],
+    "source": "logs"
+   },
+   {
+    "name": "문의 답변",
+    "target": "Inquiry",
+    "description": "고객 문의에 답변한다.",
+    "roles": [
+     "AI비서",
+     "세무사",
+     "실무자"
+    ],
+    "actor_types": [
+     "agent",
+     "human"
+    ],
+    "preconditions": [
+     "AI비서는 세액·가산세 계산 문의에 답하지 않는 것이 원칙이다.",
+     "담당자에게 넘어간 문의는 담당자가 답변하는 것이 원칙이다.",
+     "세액이나 가산세 계산 문의는 담당자가 직접 답변한다."
+    ],
+    "approval": null,
+    "transition": null,
+    "effects": [
+     "AI비서가 일반 안내 문의에 답변하면 답변완료로 처리하고 답변 내용, 답변자, 답변 시각을 기록한다."
+    ],
+    "qa": [
+     "Q090",
+     "Q091",
+     "Q092",
+     "Q093",
+     "Q094",
+     "Q097"
+    ],
+    "source": "logs"
+   }
+  ]
+ },
+ "tests_draft": [
+  {
+   "id": "Q002",
+   "action": "assign_accountant",
+   "actor": "실무자",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "실무자가 고객의 담당자 배정을 바꿀 수 있나요?"
+  },
+  {
+   "id": "Q003",
+   "action": "assign_accountant",
+   "actor": "AI비서",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서가 고객의 담당자 배정을 바꿀 수 있나요?"
+  },
+  {
+   "id": "Q011",
+   "action": "register_customer_business_type",
+   "actor": "세무사",
+   "target_state": null,
+   "where": {
+    "field": "business_type",
+    "op": "eq",
+    "value": "법인"
+   },
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "법인 고객을 간이과세자로 등록할 수 있나요?"
+  },
+  {
+   "id": "Q023",
+   "action": "request_documents",
+   "actor": "세무사",
+   "target_state": null,
+   "where": {
+    "field": "tax_return.status",
+    "op": "eq",
+    "value": "검토중"
+   },
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "세무사가 검토중인 신고의 자료를 요청할 수 있나요?"
+  },
+  {
+   "id": "Q024",
+   "action": "request_documents",
+   "actor": "세무사",
+   "target_state": null,
+   "where": {
+    "field": "tax_return.status",
+    "op": "eq",
+    "value": "신고완료"
+   },
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "세무사가 신고완료된 신고의 자료를 요청할 수 있나요?"
+  },
+  {
+   "id": "Q025",
+   "action": "request_documents",
+   "actor": "세무사",
+   "target_state": null,
+   "where": {
+    "field": "tax_return.status",
+    "op": "eq",
+    "value": "기한후신고"
+   },
+   "expect": "불가",
+   "outcome": "skip",
+   "reason": "조건에 맞는 대상이 데이터에 없음",
+   "question": "세무사가 기한후신고 상태인 신고의 자료를 요청할 수 있나요?"
+  },
+  {
+   "id": "Q038",
+   "action": "cancel_document_request",
+   "actor": "세무사",
+   "target_state": "요청됨",
+   "where": {
+    "field": "tax_return.status",
+    "op": "eq",
+    "value": "검토중"
+   },
+   "expect": "불가",
+   "outcome": "skip",
+   "reason": "조건에 맞는 대상이 데이터에 없음",
+   "question": "세무사가 검토중인 신고의 자료 요청을 취소할 수 있나요?"
+  },
+  {
+   "id": "Q044",
+   "action": "record_document_receipt",
+   "actor": "AI비서",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서가 고객이 보낸 자료의 접수를 기록할 수 있나요?"
+  },
+  {
+   "id": "Q045",
+   "action": "record_document_receipt",
+   "actor": "실무자",
+   "target_state": null,
+   "where": {
+    "field": "tax_return.status",
+    "op": "eq",
+    "value": "검토중"
+   },
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "실무자가 검토중인 신고의 자료 접수를 기록할 수 있나요?"
+  },
+  {
+   "id": "Q053",
+   "action": "start_tax_return_review",
+   "actor": "시스템",
+   "target_state": "자료수집중",
+   "where": {
+    "some": {
+     "link": "submissions",
+     "where": {
+      "field": "status",
+      "op": "eq",
+      "value": "미요청"
+     }
+    }
+   },
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "미요청 상태인 자료가 하나라도 남은 신고는 검토를 시작할 수 있나요?"
+  },
+  {
+   "id": "Q054",
+   "action": "start_tax_return_review",
+   "actor": "시스템",
+   "target_state": "자료수집중",
+   "where": {
+    "some": {
+     "link": "submissions",
+     "where": {
+      "field": "status",
+      "op": "eq",
+      "value": "요청됨"
+     }
+    }
+   },
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "요청됨 상태인 자료가 하나라도 남은 신고는 검토를 시작할 수 있나요?"
+  },
+  {
+   "id": "Q055",
+   "action": "start_tax_return_review",
+   "actor": "시스템",
+   "target_state": "자료수집중",
+   "where": {
+    "none": {
+     "link": "submissions",
+     "where": null
+    }
+   },
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "자료 현황이 아예 등록되지 않은 신고는 검토를 시작할 수 있나요?"
+  },
+  {
+   "id": "Q062",
+   "action": "return_to_document_collection",
+   "actor": "세무사",
+   "target_state": "신고완료",
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "신고완료된 신고를 자료수집 단계로 되돌릴 수 있나요?"
+  },
+  {
+   "id": "Q066",
+   "action": "complete_tax_return",
+   "actor": "실무자",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "실무자가 신고 완료 처리를 할 수 있나요?"
+  },
+  {
+   "id": "Q067",
+   "action": "complete_tax_return",
+   "actor": "AI비서",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서가 신고 완료 처리를 할 수 있나요?"
+  },
+  {
+   "id": "Q068",
+   "action": "complete_tax_return",
+   "actor": "시스템",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "시스템이 신고 완료 처리를 할 수 있나요?"
+  },
+  {
+   "id": "Q069",
+   "action": "complete_tax_return",
+   "actor": "세무사",
+   "target_state": "자료수집중",
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "자료수집중인 신고를 바로 신고 완료 처리할 수 있나요?"
+  },
+  {
+   "id": "Q070",
+   "action": "complete_tax_return",
+   "actor": "세무사",
+   "target_state": "검토중",
+   "where": {
+    "some": {
+     "link": "submissions",
+     "where": {
+      "field": "status",
+      "op": "in",
+      "value": [
+       "미요청",
+       "요청됨"
+      ]
+     }
+    }
+   },
+   "expect": "불가",
+   "outcome": "skip",
+   "reason": "조건에 맞는 대상이 데이터에 없음",
+   "question": "미제출 자료가 남은 검토중 신고를 완료할 수 있나요?"
+  },
+  {
+   "id": "Q075",
+   "action": "process_late_filing",
+   "actor": "실무자",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "실무자가 기한후신고 처리를 할 수 있나요?"
+  },
+  {
+   "id": "Q076",
+   "action": "process_late_filing",
+   "actor": "AI비서",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서가 기한후신고 처리를 할 수 있나요?"
+  },
+  {
+   "id": "Q077",
+   "action": "process_late_filing",
+   "actor": "시스템",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "시스템이 기한후신고 처리를 할 수 있나요?"
+  },
+  {
+   "id": "Q078",
+   "action": "process_late_filing",
+   "actor": "세무사",
+   "target_state": "자료수집중",
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "자료수집중인 신고를 바로 기한후신고로 처리할 수 있나요?"
+  },
+  {
+   "id": "Q082",
+   "action": "escalate_inquiry",
+   "actor": "AI비서",
+   "target_state": "접수",
+   "where": {
+    "field": "customer.business_status",
+    "op": "eq",
+    "value": "폐업"
+   },
+   "expect": "가능",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서는 폐업 고객의 문의를 담당자에게 넘길 수 있나요?"
+  },
+  {
+   "id": "Q083",
+   "action": "escalate_inquiry",
+   "actor": "AI비서",
+   "target_state": "접수",
+   "where": {
+    "field": "customer.business_status",
+    "op": "eq",
+    "value": "휴업"
+   },
+   "expect": "가능",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서는 휴업 고객의 문의를 담당자에게 넘길 수 있나요?"
+  },
+  {
+   "id": "Q084",
+   "action": "escalate_inquiry",
+   "actor": "AI비서",
+   "target_state": "접수",
+   "where": {
+    "field": "category",
+    "op": "eq",
+    "value": "세금계산"
+   },
+   "expect": "가능",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서는 세액 계산 문의를 담당자에게 넘길 수 있나요?"
+  },
+  {
+   "id": "Q090",
+   "action": "answer_inquiry",
+   "actor": "AI비서",
+   "target_state": "접수",
+   "where": null,
+   "expect": "가능",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서는 일반 안내 문의에 답변할 수 있나요?"
+  },
+  {
+   "id": "Q091",
+   "action": "answer_inquiry",
+   "actor": "AI비서",
+   "target_state": "접수",
+   "where": {
+    "field": "category",
+    "op": "eq",
+    "value": "세금계산"
+   },
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서는 세액 계산 문의에 답변할 수 있나요?"
+  },
+  {
+   "id": "Q092",
+   "action": "answer_inquiry",
+   "actor": "AI비서",
+   "target_state": "담당자확인",
+   "where": null,
+   "expect": "불가",
+   "outcome": "skip",
+   "reason": "조건에 맞는 대상이 데이터에 없음",
+   "question": "AI비서는 담당자에게 넘어간 문의에 답변할 수 있나요?"
+  },
+  {
+   "id": "Q124",
+   "action": "assign_accountant",
+   "actor": "세무사",
+   "target_state": null,
+   "where": null,
+   "expect": "가능",
+   "outcome": "pass",
+   "reason": "",
+   "question": "세무사는 고객 담당자를 배정할 수 있나요?"
+  },
+  {
+   "id": "Q125",
+   "action": "assign_accountant",
+   "actor": "실무자",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "실무자는 고객 담당자를 배정할 수 있나요?"
+  },
+  {
+   "id": "Q126",
+   "action": "assign_accountant",
+   "actor": "AI비서",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서는 고객 담당자를 변경할 수 있나요?"
+  },
+  {
+   "id": "Q127",
+   "action": "assign_accountant",
+   "actor": "시스템",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "시스템은 고객 담당자를 배정할 수 있나요?"
+  }
+ ],
+ "tests_gold": [
+  {
+   "id": "Q002",
+   "action": "assign_accountant",
+   "actor": "실무자",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "실무자가 고객의 담당자 배정을 바꿀 수 있나요?"
+  },
+  {
+   "id": "Q003",
+   "action": "assign_accountant",
+   "actor": "AI비서",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서가 고객의 담당자 배정을 바꿀 수 있나요?"
+  },
+  {
+   "id": "Q011",
+   "action": null,
+   "actor": "세무사",
+   "target_state": null,
+   "where": {
+    "field": "business_type",
+    "op": "eq",
+    "value": "법인"
+   },
+   "expect": "불가",
+   "outcome": "fail",
+   "reason": "이 업무에 해당하는 Action 이 없음",
+   "question": "법인 고객을 간이과세자로 등록할 수 있나요?"
+  },
+  {
+   "id": "Q023",
+   "action": "request_missing_documents",
+   "actor": "세무사",
+   "target_state": null,
+   "where": {
+    "field": "tax_return.status",
+    "op": "eq",
+    "value": "검토중"
+   },
+   "expect": "불가",
+   "outcome": "fail",
+   "reason": "Action 의 대상이 다름 (TaxReturn, 질문은 DocumentSubmission)",
+   "question": "세무사가 검토중인 신고의 자료를 요청할 수 있나요?"
+  },
+  {
+   "id": "Q024",
+   "action": "request_missing_documents",
+   "actor": "세무사",
+   "target_state": null,
+   "where": {
+    "field": "tax_return.status",
+    "op": "eq",
+    "value": "신고완료"
+   },
+   "expect": "불가",
+   "outcome": "fail",
+   "reason": "Action 의 대상이 다름 (TaxReturn, 질문은 DocumentSubmission)",
+   "question": "세무사가 신고완료된 신고의 자료를 요청할 수 있나요?"
+  },
+  {
+   "id": "Q025",
+   "action": "request_missing_documents",
+   "actor": "세무사",
+   "target_state": null,
+   "where": {
+    "field": "tax_return.status",
+    "op": "eq",
+    "value": "기한후신고"
+   },
+   "expect": "불가",
+   "outcome": "fail",
+   "reason": "Action 의 대상이 다름 (TaxReturn, 질문은 DocumentSubmission)",
+   "question": "세무사가 기한후신고 상태인 신고의 자료를 요청할 수 있나요?"
+  },
+  {
+   "id": "Q038",
+   "action": "cancel_document_request",
+   "actor": "세무사",
+   "target_state": "요청됨",
+   "where": {
+    "field": "tax_return.status",
+    "op": "eq",
+    "value": "검토중"
+   },
+   "expect": "불가",
+   "outcome": "fail",
+   "reason": "Action 의 대상이 다름 (TaxReturn, 질문은 DocumentSubmission)",
+   "question": "세무사가 검토중인 신고의 자료 요청을 취소할 수 있나요?"
+  },
+  {
+   "id": "Q044",
+   "action": "record_document_submission",
+   "actor": "AI비서",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서가 고객이 보낸 자료의 접수를 기록할 수 있나요?"
+  },
+  {
+   "id": "Q045",
+   "action": "record_document_submission",
+   "actor": "실무자",
+   "target_state": null,
+   "where": {
+    "field": "tax_return.status",
+    "op": "eq",
+    "value": "검토중"
+   },
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "실무자가 검토중인 신고의 자료 접수를 기록할 수 있나요?"
+  },
+  {
+   "id": "Q053",
+   "action": "start_review",
+   "actor": "시스템",
+   "target_state": "자료수집중",
+   "where": {
+    "some": {
+     "link": "submissions",
+     "where": {
+      "field": "status",
+      "op": "eq",
+      "value": "미요청"
+     }
+    }
+   },
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "미요청 상태인 자료가 하나라도 남은 신고는 검토를 시작할 수 있나요?"
+  },
+  {
+   "id": "Q054",
+   "action": "start_review",
+   "actor": "시스템",
+   "target_state": "자료수집중",
+   "where": {
+    "some": {
+     "link": "submissions",
+     "where": {
+      "field": "status",
+      "op": "eq",
+      "value": "요청됨"
+     }
+    }
+   },
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "요청됨 상태인 자료가 하나라도 남은 신고는 검토를 시작할 수 있나요?"
+  },
+  {
+   "id": "Q055",
+   "action": "start_review",
+   "actor": "시스템",
+   "target_state": "자료수집중",
+   "where": {
+    "none": {
+     "link": "submissions",
+     "where": null
+    }
+   },
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "자료 현황이 아예 등록되지 않은 신고는 검토를 시작할 수 있나요?"
+  },
+  {
+   "id": "Q062",
+   "action": "return_to_collection",
+   "actor": "세무사",
+   "target_state": "신고완료",
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "신고완료된 신고를 자료수집 단계로 되돌릴 수 있나요?"
+  },
+  {
+   "id": "Q066",
+   "action": "complete_filing",
+   "actor": "실무자",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "실무자가 신고 완료 처리를 할 수 있나요?"
+  },
+  {
+   "id": "Q067",
+   "action": "complete_filing",
+   "actor": "AI비서",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서가 신고 완료 처리를 할 수 있나요?"
+  },
+  {
+   "id": "Q068",
+   "action": "complete_filing",
+   "actor": "시스템",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "시스템이 신고 완료 처리를 할 수 있나요?"
+  },
+  {
+   "id": "Q069",
+   "action": "complete_filing",
+   "actor": "세무사",
+   "target_state": "자료수집중",
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "자료수집중인 신고를 바로 신고 완료 처리할 수 있나요?"
+  },
+  {
+   "id": "Q070",
+   "action": "complete_filing",
+   "actor": "세무사",
+   "target_state": "검토중",
+   "where": {
+    "some": {
+     "link": "submissions",
+     "where": {
+      "field": "status",
+      "op": "in",
+      "value": [
+       "미요청",
+       "요청됨"
+      ]
+     }
+    }
+   },
+   "expect": "불가",
+   "outcome": "skip",
+   "reason": "조건에 맞는 대상이 데이터에 없음",
+   "question": "미제출 자료가 남은 검토중 신고를 완료할 수 있나요?"
+  },
+  {
+   "id": "Q075",
+   "action": "file_late",
+   "actor": "실무자",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "실무자가 기한후신고 처리를 할 수 있나요?"
+  },
+  {
+   "id": "Q076",
+   "action": "file_late",
+   "actor": "AI비서",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서가 기한후신고 처리를 할 수 있나요?"
+  },
+  {
+   "id": "Q077",
+   "action": "file_late",
+   "actor": "시스템",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "시스템이 기한후신고 처리를 할 수 있나요?"
+  },
+  {
+   "id": "Q078",
+   "action": "file_late",
+   "actor": "세무사",
+   "target_state": "자료수집중",
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "자료수집중인 신고를 바로 기한후신고로 처리할 수 있나요?"
+  },
+  {
+   "id": "Q082",
+   "action": "escalate_inquiry",
+   "actor": "AI비서",
+   "target_state": "접수",
+   "where": {
+    "field": "customer.business_status",
+    "op": "eq",
+    "value": "폐업"
+   },
+   "expect": "가능",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서는 폐업 고객의 문의를 담당자에게 넘길 수 있나요?"
+  },
+  {
+   "id": "Q083",
+   "action": "escalate_inquiry",
+   "actor": "AI비서",
+   "target_state": "접수",
+   "where": {
+    "field": "customer.business_status",
+    "op": "eq",
+    "value": "휴업"
+   },
+   "expect": "가능",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서는 휴업 고객의 문의를 담당자에게 넘길 수 있나요?"
+  },
+  {
+   "id": "Q084",
+   "action": "escalate_inquiry",
+   "actor": "AI비서",
+   "target_state": "접수",
+   "where": {
+    "field": "category",
+    "op": "eq",
+    "value": "세금계산"
+   },
+   "expect": "가능",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서는 세액 계산 문의를 담당자에게 넘길 수 있나요?"
+  },
+  {
+   "id": "Q090",
+   "action": "answer_inquiry",
+   "actor": "AI비서",
+   "target_state": "접수",
+   "where": null,
+   "expect": "가능",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서는 일반 안내 문의에 답변할 수 있나요?"
+  },
+  {
+   "id": "Q091",
+   "action": "answer_inquiry",
+   "actor": "AI비서",
+   "target_state": "접수",
+   "where": {
+    "field": "category",
+    "op": "eq",
+    "value": "세금계산"
+   },
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서는 세액 계산 문의에 답변할 수 있나요?"
+  },
+  {
+   "id": "Q092",
+   "action": "answer_inquiry",
+   "actor": "AI비서",
+   "target_state": "담당자확인",
+   "where": null,
+   "expect": "불가",
+   "outcome": "skip",
+   "reason": "조건에 맞는 대상이 데이터에 없음",
+   "question": "AI비서는 담당자에게 넘어간 문의에 답변할 수 있나요?"
+  },
+  {
+   "id": "Q124",
+   "action": "assign_accountant",
+   "actor": "세무사",
+   "target_state": null,
+   "where": null,
+   "expect": "가능",
+   "outcome": "pass",
+   "reason": "",
+   "question": "세무사는 고객 담당자를 배정할 수 있나요?"
+  },
+  {
+   "id": "Q125",
+   "action": "assign_accountant",
+   "actor": "실무자",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "실무자는 고객 담당자를 배정할 수 있나요?"
+  },
+  {
+   "id": "Q126",
+   "action": "assign_accountant",
+   "actor": "AI비서",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "AI비서는 고객 담당자를 변경할 수 있나요?"
+  },
+  {
+   "id": "Q127",
+   "action": "assign_accountant",
+   "actor": "시스템",
+   "target_state": null,
+   "where": null,
+   "expect": "불가",
+   "outcome": "pass",
+   "reason": "",
+   "question": "시스템은 고객 담당자를 배정할 수 있나요?"
+  }
+ ]
+}

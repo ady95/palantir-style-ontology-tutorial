@@ -1,0 +1,146 @@
+# =============================================================================
+#  37장 전문가 검토 기록 — results37 1회차 초안 (draft_1.yaml · qa_1.json)
+#
+#  검토자는 세무사 A001. 이 실습에서는 저자가 전문가 역할을 맡았고, 문서에 없던 질문의 답과 Action 수정은
+#  손으로 쓴 세무 정의(taxos v0.8.0)를 업무 기준으로 삼아 적었다. 고친 내용은 37_review.py 가 수정 기록으로 남긴다.
+#
+#  qa:       Q/A 번호 → verdict(answer: 문서에 없던 질문에 답 | fix: 답이나 테스트 조건을 고침 | out_of_scope: 범위 밖)
+#  actions:  생성 Action 이름 → decision(approve | modify | keep_active | reject), rename, patches, reason
+#            patches: {set|remove|append: 경로, value: 값}  경로는 definition.permission.roles 처럼 점으로
+# =============================================================================
+reviewer: {id: A001, role: 세무사, type: human}
+
+allow_breaking: >-
+  Action 이름은 기존 이름으로 맞췄지만 입력(파라미터) 이름이 바뀐 Action 이 있다.
+  호출하는 쪽(에이전트 도구 설명·API 사용 코드)을 함께 고치기로 하고 반영한다.
+
+qa:
+  # ---- 문서에 답이 없던 질문 (세무 정의 기준으로 답함)
+  Q004: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # 시스템이 고객의 담당자를 배정할 수 있나요?
+  Q007: {verdict: answer, answer: "아니요, 승인 없이 바로 처리합니다.", case: {expect: 가능}}   # 세무사가 담당자를 배정할 때 승인이 필요한가요?
+  Q009: {verdict: out_of_scope, reason: 고객 정보 등록·변경은 이번 범위가 아님}   # 세무사가 고객 정보를 등록하거나 변경할 수 있나요?
+  Q010: {verdict: out_of_scope, reason: 고객 정보 등록·변경은 이번 범위가 아님}   # 실무자가 고객 정보를 등록하거나 변경할 수 있나요?
+  Q011: {verdict: out_of_scope, reason: 고객 정보 등록·변경은 이번 범위가 아님}   # AI비서가 고객 정보를 등록하거나 변경할 수 있나요?
+  Q012: {verdict: out_of_scope, reason: 고객 정보 등록·변경은 이번 범위가 아님}   # 시스템이 고객 정보를 등록하거나 변경할 수 있나요?
+  Q014: {verdict: out_of_scope, reason: 고객 정보 등록·변경은 이번 범위가 아님}   # 고객 정보를 등록할 때 승인이 필요한가요?
+  Q015: {verdict: out_of_scope, reason: 고객 정보 등록·변경은 이번 범위가 아님}   # 고객 정보를 등록하면 시스템에서 무엇이 바뀌나요?
+  Q017: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # 실무자가 고객의 위험 등급을 바꿀 수 있나요?
+  Q018: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # AI비서가 고객의 위험 등급을 바꿀 수 있나요?
+  Q019: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # 시스템이 고객의 위험 등급을 바꿀 수 있나요?
+  Q021: {verdict: answer, answer: "아니요, 승인 없이 바로 처리합니다.", case: {expect: 가능}}   # 세무사가 위험 등급을 변경할 때 승인이 필요한가요?
+  Q026: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # 시스템이 자료를 요청할 수 있나요?
+  Q036: {verdict: answer, answer: "아니요, 승인 없이 바로 처리합니다.", case: {expect: 가능}}   # 세무사가 자료를 요청할 때 승인이 필요한가요?
+  Q037: {verdict: answer, answer: "아니요, 승인 없이 바로 처리합니다.", case: {expect: 가능}}   # 실무자가 자료를 요청할 때 승인이 필요한가요?
+  Q041: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # AI비서가 자료 요청을 취소할 수 있나요?
+  Q042: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # 시스템이 자료 요청을 취소할 수 있나요?
+  Q045: {verdict: answer, answer: "아니요, 승인 없이 바로 처리합니다.", case: {expect: 가능}}   # 자료 요청을 취소할 때 승인이 필요한가요?
+  Q053: {verdict: answer, answer: "아니요, 승인 없이 바로 처리합니다.", case: {expect: 가능}}   # 자료 접수를 기록할 때 승인이 필요한가요?
+  Q054: {verdict: answer, answer: "접수한 자료가 제출완료가 되고 제출일이 기록됩니다. 자료 접수 이벤트가 나가 필수 자료가 모두 모이면 검토가 자동으로 시작됩니다."}   # 자료 접수를 기록하면 시스템에서 무엇이 바뀌나요?
+  Q055: {verdict: answer, answer: "예, 할 수 있습니다.", case: {expect: 가능}}   # 세무사가 신고서 검토를 시작할 수 있나요?
+  Q056: {verdict: answer, answer: "예, 할 수 있습니다.", case: {expect: 가능}}   # 실무자가 신고서 검토를 시작할 수 있나요?
+  Q057: {verdict: answer, answer: "예, 할 수 있습니다.", case: {expect: 가능}}   # AI비서가 신고서 검토를 시작할 수 있나요?
+  Q064: {verdict: answer, answer: "아니요, 승인 없이 바로 처리합니다.", case: {expect: 가능}}   # 검토를 시작하려면 승인이 필요한가요?
+  Q067: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # 실무자가 검토 중 자료 부족을 발견하면 신고를 자료수집 단계로 되돌릴 수 있나요?
+  Q068: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # AI비서가 검토 중 자료 부족을 발견하면 신고를 자료수집 단계로 되돌릴 수 있나요?
+  Q069: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # 시스템이 검토 중 자료 부족을 발견하면 신고를 자료수집 단계로 되돌릴 수 있나요?
+  Q071: {verdict: answer, answer: "아니요, 승인 없이 바로 처리합니다.", case: {expect: 가능}}   # 세무사가 검토 중인 신고를 자료수집 단계로 되돌릴 때 승인이 필요한가요?
+  Q080: {verdict: answer, answer: "아니요, 승인 없이 바로 처리합니다.", case: {expect: 가능}}   # 세무사가 신고 완료 처리를 할 때 승인이 필요한가요?
+  Q088: {verdict: answer, answer: "아니요, 승인 없이 바로 처리합니다.", case: {expect: 가능}}   # 세무사가 기한후신고 처리를 할 때 승인이 필요한가요?
+  Q094: {verdict: answer, answer: "예, 할 수 있습니다.", case: {expect: 가능, target: TaxReturn}}   # 세무사가 자료를 요청할 수 있나요?
+  Q095: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가, target: TaxReturn}}   # 시스템이 자료를 요청할 수 있나요?
+  Q096: {verdict: answer, answer: "아직 요청하지 않은(미요청) 자료가 모두 요청됨으로 바뀌고, 담당자에게 자료요청 업무가 생깁니다."}   # 자료 요청을 발송하면 자료 제출 현황에서 무엇이 바뀌나요?
+  Q101: {verdict: answer, answer: "예, 할 수 있습니다.", case: {expect: 가능}}   # 실무자가 문의를 담당자에게 전달할 수 있나요?
+  Q102: {verdict: answer, answer: "예, 할 수 있습니다.", case: {expect: 가능}}   # 세무사가 문의를 담당자에게 전달할 수 있나요?
+  Q103: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # 시스템이 문의를 담당자에게 전달할 수 있나요?
+  Q104: {verdict: answer, answer: "아니요, 승인 없이 바로 처리합니다.", case: {expect: 가능}}   # AI비서가 폐업 고객의 문의를 전달할 때 승인이 필요한가요?
+  Q111: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # 시스템이 문의에 답변할 수 있나요?
+  Q112: {verdict: answer, answer: "아니요, 승인 없이 바로 처리합니다.", case: {expect: 가능}}   # AI비서가 일반 안내 문의에 답변할 때 승인이 필요한가요?
+  Q115: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # 실무자가 검토 중인 신고를 직접 자료수집 단계로 되돌릴 수 있나요?
+  Q116: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # AI비서가 검토 중인 신고를 자료수집 단계로 되돌릴 수 있나요?
+  Q117: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # 시스템이 검토 중인 신고를 자료수집 단계로 되돌릴 수 있나요?
+  Q118: {verdict: answer, answer: "아니요, 승인 없이 바로 처리합니다.", case: {expect: 가능}}   # 자료 누락으로 신고를 자료수집 단계로 되돌릴 때 승인이 필요한가요?
+  Q121: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # 실무자가 신고를 신고완료로 처리할 수 있나요?
+  Q122: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # AI비서가 신고를 신고완료로 처리할 수 있나요?
+  Q123: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # 시스템이 신고를 신고완료로 처리할 수 있나요?
+  Q124: {verdict: answer, answer: "아니요, 승인 없이 바로 처리합니다.", case: {expect: 가능}}   # 신고를 신고완료로 처리할 때 승인이 필요한가요?
+  Q125: {verdict: answer, answer: "신고 상태가 신고완료로 바뀌고 신고일이 기록됩니다."}   # 신고완료 처리를 하면 신고에서 무엇이 바뀌나요?
+  Q127: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # 실무자가 신고를 기한후신고로 처리할 수 있나요?
+  Q128: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # AI비서가 신고를 기한후신고로 처리할 수 있나요?
+  Q129: {verdict: answer, answer: "아니요, 할 수 없습니다.", case: {expect: 불가}}   # 시스템이 신고를 기한후신고로 처리할 수 있나요?
+  Q130: {verdict: answer, answer: "아니요, 승인 없이 바로 처리합니다.", case: {expect: 가능}}   # 기한이 지난 신고를 기한후신고로 처리할 때 승인이 필요한가요?
+  Q136: {verdict: answer, answer: "담당 고객 수가 최대치인 담당자에게는 배정할 수 없습니다."}   # 세무사가 고객 담당자를 배정할 수 없는 조건이 있나요?
+  Q137: {verdict: answer, answer: "아니요, 승인 없이 바로 처리합니다.", case: {expect: 가능}}   # 세무사가 고객 담당자를 배정할 때 승인이 필요한가요?
+  Q138: {verdict: answer, answer: "고객의 담당자가 바뀌고, 완료된 담당자배정 업무가 하나 남습니다."}   # 고객 담당자를 배정하면 고객 정보에서 무엇이 바뀌나요?
+  # ---- 정답 정의에서도 실패한 Q/A — 테스트 조건이 잘못 옮겨짐
+  Q013: {verdict: out_of_scope, reason: "데이터 제약(법인은 간이과세자 불가)이지 Action 의 판단이 아님 — DB 제약으로 따로 검사"}
+  Q090: {verdict: fix, case: {target: TaxReturn, target_state: 자료수집중, where: {field: customer.business_status, op: eq, value: 폐업}}, reason: 자료 요청의 대상은 신고}
+  Q091: {verdict: fix, case: {target: TaxReturn, target_state: 자료수집중, where: {field: customer.business_status, op: eq, value: 휴업}}, reason: 자료 요청의 대상은 신고}
+  Q092: {verdict: fix, case: {target: TaxReturn, target_state: 자료수집중, where: {field: customer.risk_level, op: eq, value: 높음}}, reason: 자료 요청의 대상은 신고}
+  Q093: {verdict: fix, case: {target: TaxReturn, target_state: 자료수집중, where: {some: {link: tasks, where: {all: [{field: task_type, op: eq, value: 자료요청}, {field: status, op: eq, value: 진행중}]}}}}, reason: 자료 요청의 대상은 신고}
+
+actions:
+  assign_customer_accountant:
+    decision: modify
+    rename: assign_accountant
+    patches:
+      - {set: definition.emits, value: [accountant_assigned], reason: 이벤트는 문서에 없는 시스템 약속 — 알림·감사 기록이 구독한다}
+  change_risk_level:
+    decision: modify
+    rename: update_risk_level
+    patches:
+      - {set: definition.emits, value: [risk_level_changed], reason: 이벤트는 문서에 없는 시스템 약속 — 알림·감사 기록이 구독한다}
+  register_or_update_customer:  {decision: reject, reason: 고객 등록·변경은 이번 범위가 아니고, 근거 Q/A 가 법인·간이과세 제약 하나뿐}
+  request_documents:
+    decision: keep_active
+    rename: request_missing_documents
+    reason: 대상을 자료 하나(DocumentSubmission)로 잡아 신고 단위 요청·자료요청 업무 확인이 빠짐 — 기존 정의 유지
+  cancel_document_request:
+    decision: keep_active
+    reason: 대상이 자료 하나라 신고 단위 취소와 자료요청 업무 취소를 표현하지 못함 — 기존 정의 유지
+  record_document_receipt:
+    decision: modify
+    rename: record_document_submission
+    patches:
+      - {set: definition.emits, value: [document_received], reason: "자동 검토 시작 구독(auto_start_review)이 이 이벤트를 기다린다"}
+  start_tax_return_review:
+    decision: modify
+    rename: start_review
+    patches:
+      - {set: definition.permission.roles, value: [세무사, 실무자, AI비서, 시스템], reason: "문서에 주어가 없던 문장 — 사람·AI 도 검토를 시작한다(구독은 시스템으로)"}
+      - {set: definition.permission.actor_types, value: [human, agent, system]}
+      - {remove: definition.parameters.due_date, reason: "구독이 입력 없이 실행하므로 필수 입력을 둘 수 없음 — 업무 기한은 신고 기한으로"}
+      - {set: definition.edits.2.values.due_date, value: $target.due_date}
+      - {set: definition.edits.2.values.created_by, value: $actor.type, reason: 실행자 유형을 그대로 남긴다}
+      - {set: definition.emits, value: [review_started], reason: 이벤트는 문서에 없는 시스템 약속 — 알림·감사 기록이 구독한다}
+  return_to_document_collection:
+    decision: modify
+    rename: return_to_collection
+    patches:
+      - {remove: definition.parameters.assignee_id, reason: "샌드박스에서 없는 담당자 키로 업무가 만들어지다 DB 외래키 오류 — 담당자는 고객의 담당자로"}
+      - {remove: definition.parameters.due_date}
+      - {set: definition.edits.2.values.assignee_id, value: $target.customer.accountant_id}
+      - {set: definition.edits.2.values.due_date, value: $target.due_date}
+      - {set: definition.edits.1.where.all.1, value: {field: status, op: in, value: [대기, 진행중]}, reason: 대기 중인 검토 업무도 함께 취소한다}
+      - {set: transitions.1.from, value: [대기, 진행중], reason: "위 조건을 바꾸자 검증기가 상태 머신 전이와 어긋난다고 알려 줌"}
+      - {set: definition.emits, value: [review_returned], reason: 이벤트는 문서에 없는 시스템 약속 — 알림·감사 기록이 구독한다}
+  complete_tax_return:
+    decision: modify
+    rename: complete_filing
+    patches:
+      - {set: definition.emits, value: [tax_return_filed], reason: 이벤트는 문서에 없는 시스템 약속 — 알림·감사 기록이 구독한다}
+  process_late_filing:
+    decision: modify
+    rename: file_late
+    patches:
+      - {set: definition.emits, value: [tax_return_filed_late], reason: 이벤트는 문서에 없는 시스템 약속 — 알림·감사 기록이 구독한다}
+  forward_inquiry:
+    decision: modify
+    rename: escalate_inquiry
+    patches:
+      - {set: definition.permission.roles, value: [세무사, 실무자, AI비서], reason: "상담 로그에는 AI 장면만 있었음 — 사람도 넘긴다"}
+      - {set: definition.permission.actor_types, value: [human, agent]}
+      - {set: definition.emits, value: [inquiry_escalated], reason: 이벤트는 문서에 없는 시스템 약속 — 알림·감사 기록이 구독한다}
+  answer_inquiry:
+    decision: modify
+    patches:
+      - {set: definition.emits, value: [inquiry_answered], reason: 이벤트는 문서에 없는 시스템 약속 — 알림·감사 기록이 구독한다}
