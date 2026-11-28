@@ -25,7 +25,7 @@ PostgreSQL + Python 기반 오픈소스로 직접 구현하고 AI 에이전트�
 | `06-hybrid-ontology/` | Semantic + Operational 하이브리드 (29장 매핑부터) |
 | `07-northwind-project/` | Northwind 기반 주문·재고 관리 (32장 발주 업무) |
 | `08-tax-os-project/` | 세무 업무 자동화 (합성 데이터, 33장 업무 규칙 목록부터) |
-| `09-auto-ontology/` | Operational Ontology 자동 생성 |
+| `09-auto-ontology/` | Operational Ontology 자동 생성 (36장 업무 문서에서 규칙·Action 추출부터) |
 | `10-benchmarks/` | PoC·비교 실험 (28장 `agent_comparison/` 부터) |
 | `datasets/` | 공개·합성 실습 데이터 |
 | `tests/` | 통합 테스트 |

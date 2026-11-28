@@ -1,0 +1,676 @@
+assign_accountant:
+  definition:
+    display_name: 담당자 배정
+    description: 새 고객에게 담당 실무자를 배정하거나 기존 담당자를 변경하고, 담당자배정 업무를 완료 상태로 기록한다.
+    target: Customer
+    parameters:
+      accountant:
+        type: object
+        object_type: Accountant
+        required: true
+        description: 배정할 실무자
+      due_date:
+        type: date
+        required: true
+        description: 담당자배정 업무의 기한
+    preconditions:
+    - message: 배정할 실무자는 담당 고객 수가 최대치 미만이어야 합니다.
+      check:
+        function: has_capacity
+        args:
+          accountant: $params.accountant
+    - message: 현재 담당자를 다시 배정할 수 없습니다.
+      check:
+        any:
+        - field: accountant_id
+          op: is_null
+        - field: accountant_id
+          op: ne
+          value: $params.accountant
+    permission:
+      roles:
+      - 세무사
+      actor_types:
+      - human
+    edits:
+    - update: target
+      set:
+        accountant_id: $params.accountant
+    - create: Task
+      values:
+        customer_id: $target.customer_id
+        task_type: 담당자배정
+        assignee_id: $params.accountant
+        status: 완료
+        due_date: $params.due_date
+        created_by: $actor.type
+        created_at: $now
+    emits: []
+  transitions: []
+change_risk_level:
+  definition:
+    display_name: 위험 등급 변경
+    description: 고객의 신고 지연 위험 등급을 변경한다. 객체 모델에 변경 이유를 기록할 적절한 속성이 없어 이유 기록은 구현할 수
+      없다.
+    target: Customer
+    parameters:
+      risk_level:
+        type: enum
+        values:
+        - 낮음
+        - 보통
+        - 높음
+        required: true
+        description: 변경할 위험 등급
+      reason:
+        type: string
+        required: true
+        description: 위험 등급 변경 이유. 객체 모델에 저장할 속성이 없다.
+    preconditions:
+    - message: 새 위험 등급은 현재 등급과 달라야 합니다.
+      check:
+        field: risk_level
+        op: ne
+        value: $params.risk_level
+    - message: 변경 이유를 입력해야 합니다.
+      check:
+        all:
+        - field: $params.reason
+          op: not_null
+        - field: $params.reason
+          op: ne
+          value: ''
+    permission:
+      roles:
+      - 세무사
+      actor_types:
+      - human
+    edits:
+    - update: target
+      set:
+        risk_level: $params.risk_level
+    emits: []
+  transitions: []
+request_documents:
+  definition:
+    display_name: 자료 요청
+    description: 신고에 필요한 미요청 자료를 고객에게 요청하고 담당 실무자의 자료요청 업무를 생성한다.
+    target: TaxReturn
+    parameters: {}
+    preconditions:
+    - message: 자료수집중인 신고에만 자료를 요청할 수 있습니다.
+      check:
+        field: status
+        op: eq
+        value: 자료수집중
+    - message: 휴업 또는 폐업 고객에게는 자료를 요청할 수 없습니다.
+      check:
+        field: customer.business_status
+        op: not_in
+        value:
+        - 휴업
+        - 폐업
+    - message: 아직 요청하지 않은 자료가 없습니다.
+      check:
+        some:
+          link: submissions
+          where:
+            field: status
+            op: eq
+            value: 미요청
+    - message: 같은 신고에 진행 중인 자료요청 업무가 있습니다.
+      check:
+        none:
+          link: tasks
+          where:
+            all:
+            - field: task_type
+              op: eq
+              value: 자료요청
+            - field: status
+              op: in
+              value:
+              - 대기
+              - 진행중
+    permission:
+      roles:
+      - 세무사
+      - 실무자
+      - AI비서
+      actor_types:
+      - human
+      - agent
+    approval:
+      required_if:
+        all:
+        - field: $actor.role
+          op: eq
+          value: AI비서
+        - field: customer.risk_level
+          op: eq
+          value: 높음
+      approver_roles:
+      - 세무사
+      reason: AI 비서가 위험 등급이 높은 고객에게 자료를 요청하므로 사람인 세무사의 승인이 필요합니다.
+      expires_in: 24h
+    edits:
+    - update_linked: submissions
+      where:
+        field: status
+        op: eq
+        value: 미요청
+      set:
+        status: 요청됨
+        requested_at: $today
+    - create: Task
+      values:
+        customer_id: $target.customer_id
+        return_id: $target.return_id
+        task_type: 자료요청
+        assignee_id: $target.customer.accountant_id
+        status: 대기
+        due_date: $target.due_date
+        created_by: $actor.type
+        created_at: $now
+    emits: []
+  transitions:
+  - object_type: DocumentSubmission
+    from:
+    - 미요청
+    to: 요청됨
+cancel_document_request:
+  definition:
+    display_name: 자료 요청 취소
+    description: 잘못 보낸 자료 요청을 취소하고 후속 업무에 취소 사유를 기록한다.
+    target: TaxReturn
+    parameters:
+      reason:
+        type: string
+        required: true
+        description: 자료 요청 취소 사유
+    preconditions:
+    - message: 자료수집중인 신고에서만 자료 요청을 취소할 수 있습니다.
+      check:
+        field: status
+        op: eq
+        value: 자료수집중
+    - message: 요청됨 상태의 자료가 있어야 합니다.
+      check:
+        some:
+          link: submissions
+          where:
+            field: status
+            op: eq
+            value: 요청됨
+    permission:
+      roles:
+      - 세무사
+      - 실무자
+      actor_types:
+      - human
+    edits:
+    - update_linked: submissions
+      where:
+        field: status
+        op: eq
+        value: 요청됨
+      set:
+        status: 미요청
+    - update_linked: tasks
+      where:
+        all:
+        - field: task_type
+          op: eq
+          value: 자료요청
+        - field: status
+          op: eq
+          value: 진행중
+      set:
+        status: 취소
+        note: $params.reason
+    emits: []
+  transitions:
+  - object_type: DocumentSubmission
+    from:
+    - 요청됨
+    to: 미요청
+  - object_type: Task
+    from:
+    - 진행중
+    to: 취소
+record_document_receipt:
+  definition:
+    display_name: 자료 접수 기록
+    description: 고객이 보낸 자료의 접수를 시스템에 기록한다.
+    target: DocumentSubmission
+    parameters:
+      document_received:
+        type: boolean
+        required: true
+        description: 고객이 자료를 보냈는지 확인
+    preconditions:
+    - message: 고객이 자료를 보내야 합니다.
+      check:
+        field: $params.document_received
+        op: eq
+        value: true
+    - message: 신고 상태가 자료수집중이어야 합니다.
+      check:
+        field: tax_return.status
+        op: eq
+        value: 자료수집중
+    permission:
+      roles:
+      - 세무사
+      - 실무자
+      actor_types:
+      - human
+    edits:
+    - update: target
+      set:
+        submitted_at: $today
+    emits: []
+  transitions: []
+start_tax_return_review:
+  definition:
+    display_name: 신고서 검토 시작
+    description: 필수 자료 준비가 끝난 신고의 검토를 시작하고, 자료요청 업무를 완료한 뒤 담당자에게 신고서검토 업무를 생성한다.
+    target: TaxReturn
+    parameters:
+      due_date:
+        type: date
+        required: true
+        description: 신고서검토 업무의 기한
+    preconditions:
+    - message: 자료수집중인 신고만 검토를 시작할 수 있습니다.
+      check:
+        field: status
+        op: eq
+        value: 자료수집중
+    - message: 필요한 자료 유형마다 자료 현황이 등록되어야 합니다.
+      check:
+        function: documents_registered
+        args:
+          tax_return: $target.return_id
+    - message: 필수 자료가 모두 제출완료 또는 해당없음이어야 합니다.
+      check:
+        none:
+          link: submissions
+          where:
+            field: status
+            op: not_in
+            value:
+            - 제출완료
+            - 해당없음
+    permission:
+      roles:
+      - 시스템
+      actor_types:
+      - system
+    edits:
+    - update: target
+      set:
+        status: 검토중
+    - update_linked: tasks
+      where:
+        all:
+        - field: task_type
+          op: eq
+          value: 자료요청
+        - field: status
+          op: in
+          value:
+          - 대기
+          - 진행중
+      set:
+        status: 완료
+    - create: Task
+      values:
+        customer_id: $target.customer_id
+        return_id: $target.return_id
+        task_type: 신고서검토
+        assignee_id: $target.customer.accountant_id
+        status: 대기
+        due_date: $params.due_date
+        created_by: $actor.type
+        created_at: $now
+    emits: []
+  transitions:
+  - object_type: TaxReturn
+    from:
+    - 자료수집중
+    to: 검토중
+  - object_type: Task
+    from:
+    - 대기
+    - 진행중
+    to: 완료
+return_to_document_collection:
+  definition:
+    display_name: 신고 자료수집으로 되돌리기
+    description: 검토 중 자료 누락이 발견된 신고를 자료수집 단계로 되돌리고, 진행 중인 신고서검토 업무를 취소하며 복귀 이유를 담은
+      고객연락 업무를 생성한다.
+    target: TaxReturn
+    parameters:
+      reason:
+        type: string
+        required: true
+        description: 자료수집 단계로 되돌리는 이유
+      due_date:
+        type: date
+        required: true
+        description: 생성할 고객연락 업무의 기한
+    preconditions:
+    - message: 검토 중인 신고만 자료수집 단계로 되돌릴 수 있습니다.
+      check:
+        field: status
+        op: eq
+        value: 검토중
+    - message: 누락된 자료가 발견된 신고만 되돌릴 수 있습니다.
+      check:
+        some:
+          link: submissions
+          where:
+            field: status
+            op: in
+            value:
+            - 미요청
+            - 요청됨
+    permission:
+      roles:
+      - 세무사
+      actor_types:
+      - human
+    edits:
+    - update: target
+      set:
+        status: 자료수집중
+    - update_linked: tasks
+      where:
+        all:
+        - field: task_type
+          op: eq
+          value: 신고서검토
+        - field: status
+          op: eq
+          value: 진행중
+      set:
+        status: 취소
+    - create: Task
+      values:
+        customer_id: $target.customer_id
+        return_id: $target.return_id
+        task_type: 고객연락
+        assignee_id: $target.customer.accountant_id
+        status: 대기
+        due_date: $params.due_date
+        created_by: $actor.type
+        created_at: $now
+        note: $params.reason
+    emits: []
+  transitions:
+  - object_type: TaxReturn
+    from:
+    - 검토중
+    to: 자료수집중
+  - object_type: Task
+    from:
+    - 진행중
+    to: 취소
+complete_tax_return:
+  definition:
+    display_name: 신고 완료 처리
+    description: 검토 중인 신고를 신고완료로 처리하고 남아 있는 신고서검토 업무를 완료한다.
+    target: TaxReturn
+    parameters: {}
+    preconditions:
+    - message: 검토 중인 신고만 완료 처리할 수 있습니다.
+      check:
+        field: status
+        op: eq
+        value: 검토중
+    - message: 아직 제출되지 않은 자료가 있습니다.
+      check:
+        none:
+          link: submissions
+          where:
+            field: status
+            op: in
+            value:
+            - 미요청
+            - 요청됨
+    - message: 신고 기한이 지났습니다.
+      check:
+        field: due_date
+        op: gte
+        value: $today
+    permission:
+      roles:
+      - 세무사
+      actor_types:
+      - human
+    edits:
+    - update: target
+      set:
+        status: 신고완료
+        filed_at: $today
+    - update_linked: tasks
+      where:
+        all:
+        - field: task_type
+          op: eq
+          value: 신고서검토
+        - field: status
+          op: in
+          value:
+          - 대기
+          - 진행중
+      set:
+        status: 완료
+    emits: []
+  transitions:
+  - object_type: TaxReturn
+    from:
+    - 검토중
+    to: 신고완료
+  - object_type: Task
+    from:
+    - 대기
+    - 진행중
+    to: 완료
+process_late_filing:
+  definition:
+    display_name: 기한후신고 처리
+    description: 신고 기한이 지난 신고를 기한후신고로 처리하고 남아 있는 신고서검토 업무를 완료한다.
+    target: TaxReturn
+    parameters: {}
+    preconditions:
+    - message: 검토중인 신고만 기한후신고로 처리할 수 있습니다.
+      check:
+        field: status
+        op: eq
+        value: 검토중
+    - message: 신고 기한이 지난 후에만 기한후신고로 처리할 수 있습니다.
+      check:
+        field: due_date
+        op: lt
+        value: $today
+    permission:
+      roles:
+      - 세무사
+      actor_types:
+      - human
+    edits:
+    - update: target
+      set:
+        status: 기한후신고
+        filed_at: $today
+    - update_linked: tasks
+      where:
+        all:
+        - field: task_type
+          op: eq
+          value: 신고서검토
+        - field: status
+          op: in
+          value:
+          - 대기
+          - 진행중
+      set:
+        status: 완료
+    emits: []
+  transitions:
+  - object_type: TaxReturn
+    from:
+    - 검토중
+    to: 기한후신고
+  - object_type: Task
+    from:
+    - 대기
+    - 진행중
+    to: 완료
+escalate_inquiry:
+  definition:
+    display_name: 문의 이관
+    description: 고객 문의를 담당자에게 넘긴다. 폐업 고객 문의에만 이관 이유를 기록하고 고객 연락 업무를 생성하는 조건부 편집은 지원되지
+      않아 제외했다.
+    target: Inquiry
+    parameters: {}
+    preconditions: []
+    permission:
+      roles:
+      - AI비서
+      actor_types:
+      - agent
+    edits:
+    - update: target
+      set:
+        status: 담당자확인
+    emits: []
+  transitions:
+  - object_type: Inquiry
+    from:
+    - 접수
+    to: 담당자확인
+answer_inquiry:
+  definition:
+    display_name: 문의 답변
+    description: 고객 문의에 답변하고 답변 내용, 답변자, 답변 시각을 기록한다.
+    target: Inquiry
+    parameters:
+      answer:
+        type: string
+        required: true
+        description: 문의에 대한 답변 내용
+    preconditions: []
+    permission:
+      roles:
+      - AI비서
+      - 세무사
+      - 실무자
+      actor_types:
+      - agent
+      - human
+      check:
+        any:
+        - all:
+          - field: category
+            op: ne
+            value: 세금계산
+          - field: status
+            op: ne
+            value: 담당자확인
+        - all:
+          - field: $actor.type
+            op: eq
+            value: human
+          - field: customer.accountant_id
+            op: eq
+            value: $actor.id
+    edits:
+    - update: target
+      set:
+        status: 답변완료
+        answer: $params.answer
+        answered_by: $actor.id
+        answered_at: $now
+    emits: []
+  transitions:
+  - object_type: Inquiry
+    from:
+    - 접수
+    - 담당자확인
+    to: 답변완료
+request_document:
+  definition:
+    display_name: 자료 요청
+    description: 고객에게 해당 자료를 요청한다. 휴업 고객은 담당자가 직접 확인하고, 폐업 고객의 문의는 담당자에게 넘긴다. 같은 신고에
+      진행 중인 자료요청 업무가 없는지 확인하는 조건은 대상 객체의 직접 링크로 표현할 수 없어 적용하지 않는다.
+    target: DocumentSubmission
+    parameters: {}
+    preconditions:
+    - message: 신고가 자료수집중일 때만 자료를 요청할 수 있습니다.
+      check:
+        field: tax_return.status
+        op: eq
+        value: 자료수집중
+    - message: 휴업 또는 폐업 고객에게는 자료를 요청할 수 없습니다.
+      check:
+        field: tax_return.customer.business_status
+        op: not_in
+        value:
+        - 휴업
+        - 폐업
+    - message: 아직 요청하지 않은 자료만 요청할 수 있습니다.
+      check:
+        field: status
+        op: eq
+        value: 미요청
+    permission:
+      roles:
+      - 세무사
+      - 실무자
+      - AI비서
+      actor_types:
+      - human
+      - agent
+    approval:
+      required_if:
+        all:
+        - field: $actor.type
+          op: eq
+          value: agent
+        - field: tax_return.customer.risk_level
+          op: eq
+          value: 높음
+      approver_roles:
+      - 세무사
+      reason: AI가 요청한 고위험 고객의 자료는 사람인 세무사의 승인 후 발송합니다.
+      expires_in: 24h
+    edits:
+    - update: target
+      set:
+        status: 요청됨
+        requested_at: $today
+    emits: []
+  transitions:
+  - object_type: DocumentSubmission
+    from:
+    - 미요청
+    to: 요청됨
+approve:
+  definition:
+    display_name: 승인
+    description: 승인 대기 중인 요청을 승인하여 발송할 수 있게 하는 업무다. 객체 모델에 승인 대기 상태와 승인 결과를 기록할 속성이
+      없어 유효한 편집 항목을 정의할 수 없다. 따라서 edits가 하나 이상이어야 하는 검증 오류를 해결할 수 없다.
+    target: Task
+    parameters: {}
+    preconditions: []
+    permission:
+      roles:
+      - 세무사
+      actor_types:
+      - human
+    edits: []
+    emits: []
+  transitions: []

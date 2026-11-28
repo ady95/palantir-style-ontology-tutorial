@@ -1,0 +1,57 @@
+# =============================================================================
+#  36장 정답 데이터 — 업무 매뉴얼(sources/manual.md)·상담 로그(sources/consult_logs.md)에 담긴 규칙과 Action
+#
+#  rules:   33장 업무 규칙 목록(08-tax-os-project/business_rules.yaml)에서 문서에 나오는 20개 (R18 은 문서에 없음)
+#           + 세무 정의(ontology.yaml)에는 있는데 33장 목록에 없던 규칙 12개 (X01~X12)
+#  actions: 문서에 나오는 업무 11개 — 정답 정의는 세무 정의(taxos v0.8.0)의 같은 이름 Action
+#  source:  manual(매뉴얼에 있음) · logs(상담 로그에만 있음) · both
+#  정답은 문서를 쓴 사람(저자)이 만들었다. 실제 문서보다 규칙이 또렷하게 쓰였을 수 있다 (36-1 참고).
+# =============================================================================
+rules:
+  - { id: R01, kind: 실행조건, source: both,   action: request_missing_documents,  rule: 자료 요청은 자료수집중인 신고에만 한다 }
+  - { id: R02, kind: 실행조건, source: both,   action: request_missing_documents,  rule: 휴업·폐업 고객에게는 자료를 요청하지 않고 담당자가 확인한다 }
+  - { id: R03, kind: 실행조건, source: manual, action: request_missing_documents,  rule: 아직 요청하지 않은(미요청) 자료가 있을 때만 요청한다 }
+  - { id: R04, kind: 실행조건, source: both,   action: request_missing_documents,  rule: 진행 중인 자료요청 업무가 있으면 다시 요청하지 않는다 }
+  - { id: R05, kind: 승인,     source: both,   action: request_missing_documents,  rule: 고위험 고객에 대한 AI의 자료 요청은 세무사 승인 후 실행한다 }
+  - { id: R06, kind: 승인,     source: both,   action: request_missing_documents,  rule: 승인은 사람(세무사)만 하고, AI는 승인할 수 없다 }
+  - { id: R07, kind: 실행조건, source: manual, action: start_review,               rule: 검토는 필수 자료가 모두 제출(또는 해당없음)된 뒤 시작한다 }
+  - { id: R08, kind: 실행조건, source: manual, action: start_review,               rule: 자료 현황이 등록되지 않은 신고는 검토를 시작하지 않는다 }
+  - { id: R09, kind: 권한,     source: manual, action: complete_filing,            rule: 신고 완료 처리는 세무사만 한다 }
+  - { id: R10, kind: 상태전이, source: manual, action: null,                       rule: 신고는 자료수집중 → 검토중 → 신고완료·기한후신고 순서로만 바뀐다 }
+  - { id: R11, kind: 실행조건, source: both,   action: complete_filing,            rule: 신고 기한이 지나면 신고 완료가 아니라 기한후신고로 처리한다 }
+  - { id: R12, kind: 실행조건, source: manual, action: assign_accountant,          rule: 담당 고객 수가 최대치인 담당자에게는 새로 배정하지 않는다 }
+  - { id: R13, kind: 정책,     source: both,   action: null,                       rule: 실무자는 본인 담당 고객과 그 고객의 신고·자료·업무만 본다 }
+  - { id: R14, kind: 정책,     source: manual, action: null,                       rule: AI 에이전트는 고객의 대표자·전화·사업자등록번호를 보지 않는다 }
+  - { id: R15, kind: 권한,     source: manual, action: record_document_submission, rule: 자료 접수 기록은 사람(세무사·실무자)만 한다 }
+  - { id: R16, kind: 실행조건, source: logs,   action: answer_inquiry,             rule: 세액·가산세 계산 문의에는 AI가 답하지 않는다 }
+  - { id: R17, kind: 실행조건, source: logs,   action: answer_inquiry,             rule: 담당자에게 넘어간 문의는 담당자가 답한다 }
+  - { id: R19, kind: DB제약,   source: manual, action: null,                       rule: 법인은 간이과세자가 될 수 없다 }
+  - { id: R20, kind: DB제약,   source: manual, action: null,                       rule: 신고완료·기한후신고에는 신고일이 있어야 한다 }
+  - { id: R21, kind: 멱등,     source: manual, action: null,                       rule: 같은 업무 요청을 다시 보내면 처음 결과를 돌려주고 두 번 실행하지 않는다 }
+  # ---- 세무 정의에는 있었지만 33장 규칙 목록에 없던 것
+  - { id: X01, kind: 권한,     source: both,   action: assign_accountant,          rule: 담당자 배정은 세무사만 한다 }
+  - { id: X02, kind: 실행조건, source: manual, action: assign_accountant,          rule: 이미 같은 담당자가 배정되어 있으면 다시 배정하지 않는다 }
+  - { id: X03, kind: 실행조건, source: manual, action: update_risk_level,          rule: 위험 등급은 지금과 다른 등급으로만 바꾼다 (세무사가 바꾼다) }
+  - { id: X04, kind: 승인,     source: manual, action: request_missing_documents,  rule: 승인 요청은 24시간 안에 처리하지 않으면 만료된다 }
+  - { id: X05, kind: 실행조건, source: manual, action: cancel_document_request,    rule: 자료 요청 취소는 자료수집중이고 요청됨 자료가 있을 때만, 세무사·실무자가 한다 }
+  - { id: X06, kind: 실행조건, source: manual, action: record_document_submission, rule: 자료 접수는 신고가 자료수집중일 때만 받는다 }
+  - { id: X07, kind: 권한,     source: both,   action: return_to_collection,       rule: 검토중인 신고를 자료수집 단계로 되돌리는 것은 세무사만 한다 }
+  - { id: X08, kind: 실행조건, source: both,   action: file_late,                  rule: 신고 기한이 지나지 않았으면 기한후신고로 처리하지 않는다 (기한후신고도 세무사만) }
+  # ---- 첫 실행 결과를 검토하다 정답에서 빠진 것을 찾아 더한 것 (문서와 정의에 모두 있음, 36-1 참고)
+  - { id: X09, kind: 실행조건, source: manual, action: complete_filing,            rule: 아직 제출되지 않은 자료가 있으면 신고 완료(기한후신고 포함)를 하지 않는다 }
+  - { id: X10, kind: 실행조건, source: manual, action: update_risk_level,          rule: 위험 등급을 바꿀 때는 이유를 남긴다 }
+  - { id: X11, kind: 실행조건, source: manual, action: cancel_document_request,    rule: 자료 요청을 취소할 때는 사유를 남긴다 }
+  - { id: X12, kind: 실행조건, source: both,   action: return_to_collection,       rule: 신고를 자료수집 단계로 되돌릴 때는 이유를 남긴다 }
+
+actions:
+  - { name: assign_accountant,          display: 담당자 배정,       target: Customer,           source: both }
+  - { name: update_risk_level,          display: 위험 등급 변경,    target: Customer,           source: manual }
+  - { name: request_missing_documents,  display: 누락 자료 요청,    target: TaxReturn,          source: both }
+  - { name: cancel_document_request,    display: 자료 요청 취소,    target: TaxReturn,          source: manual }
+  - { name: record_document_submission, display: 자료 접수,         target: DocumentSubmission, source: manual }
+  - { name: start_review,               display: 신고서 검토 시작,  target: TaxReturn,          source: manual }
+  - { name: return_to_collection,       display: 자료 보완 요청,    target: TaxReturn,          source: both }
+  - { name: complete_filing,            display: 신고 완료 처리,    target: TaxReturn,          source: both }
+  - { name: file_late,                  display: 기한후신고 처리,   target: TaxReturn,          source: both }
+  - { name: answer_inquiry,             display: 문의 답변,         target: Inquiry,            source: logs }
+  - { name: escalate_inquiry,           display: 문의를 담당자에게 넘기기, target: Inquiry,    source: logs }
