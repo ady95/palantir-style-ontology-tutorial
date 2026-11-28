@@ -1,0 +1,287 @@
+{
+  "share": {
+    "engine": {
+      "__init__.py": 11,
+      "__main__.py": 3,
+      "actions.py": 919,
+      "agent.py": 460,
+      "api.py": 331,
+      "audit.py": 182,
+      "auth.py": 85,
+      "cli.py": 855,
+      "codegen.py": 188,
+      "db.py": 113,
+      "describe.py": 75,
+      "functions.py": 168,
+      "llm.py": 119,
+      "loader.py": 22,
+      "mcp_server.py": 182,
+      "metamodel.py": 276,
+      "objects.py": 362,
+      "outbox.py": 154,
+      "policy.py": 136,
+      "query.py": 220,
+      "reasoning.py": 129,
+      "registry.py": 408,
+      "schema.py": 60,
+      "sdk.py": 226,
+      "semantic.py": 418,
+      "states.py": 60,
+      "subscriptions.py": 108,
+      "validator.py": 505,
+      "workflow.py": 322
+    },
+    "domains": {
+      "taxos": {
+        "정의(YAML)": 754,
+        "도메인 코드": 125,
+        "데이터 스키마": 151,
+        "응용": 1224
+      },
+      "northwind": {
+        "정의(YAML)": 322,
+        "도메인 코드": 34,
+        "데이터 스키마": 16,
+        "응용": 231
+      },
+      "maintenance": {
+        "정의(YAML)": 243,
+        "도메인 코드": 15,
+        "데이터 스키마": 66,
+        "응용": 0
+      }
+    }
+  },
+  "traces": {
+    "agent.py": {
+      "lines": 1,
+      "terms": {
+        "taxos": [
+          "담당자"
+        ]
+      }
+    },
+    "audit.py": {
+      "lines": 2,
+      "terms": {
+        "taxos": [
+          "notifications"
+        ]
+      }
+    },
+    "cli.py": {
+      "lines": 11,
+      "terms": {
+        "taxos": [
+          "TaxReturn",
+          "customer",
+          "customers",
+          "tasks",
+          "고객",
+          "세무",
+          "세무사"
+        ],
+        "northwind": [
+          "customer",
+          "고객"
+        ]
+      }
+    },
+    "reasoning.py": {
+      "lines": 8,
+      "terms": {
+        "taxos": [
+          "CustomerSegment",
+          "assign_segment",
+          "customer",
+          "release_segment"
+        ],
+        "northwind": [
+          "customer"
+        ]
+      }
+    },
+    "workflow.py": {
+      "lines": 14,
+      "terms": {
+        "taxos": [
+          "Customer",
+          "DocumentType",
+          "TaxReturn",
+          "customer",
+          "customers",
+          "filing_delay_risk",
+          "missing_documents",
+          "request_missing_documents",
+          "tax_return",
+          "고객",
+          "사무소",
+          "세무",
+          "세무사"
+        ],
+        "northwind": [
+          "Customer",
+          "customer",
+          "고객"
+        ]
+      }
+    }
+  },
+  "history": [
+    {
+      "chapter": 20,
+      "commit": "27105cc",
+      "subject": "Add state machines to MiniOnto (ch.20): declared transitions, enforcem",
+      "테스트·예제·실험": 426,
+      "엔진": 648,
+      "도메인": 141
+    },
+    {
+      "chapter": 21,
+      "commit": "32592f5",
+      "subject": "Add authentication, permission policies and approval workflow to MiniO",
+      "테스트·예제·실험": 467,
+      "엔진": 917,
+      "도메인": 41
+    },
+    {
+      "chapter": 22,
+      "commit": "c8177ce",
+      "subject": "Add lock timeouts, idempotency keys, error classification and compensa",
+      "테스트·예제·실험": 375,
+      "엔진": 233,
+      "도메인": 31
+    },
+    {
+      "chapter": 23,
+      "commit": "ed6a181",
+      "subject": "Add an outbox dispatcher and notification write-back to MiniOnto (ch.2",
+      "테스트·예제·실험": 383,
+      "엔진": 253,
+      "도메인": 207
+    },
+    {
+      "chapter": 24,
+      "commit": "6393f56",
+      "subject": "Add an audit log, event subscriptions and feedback example to MiniOnto",
+      "테스트·예제·실험": 313,
+      "엔진": 506,
+      "도메인": 15
+    },
+    {
+      "chapter": 25,
+      "commit": "266022c",
+      "subject": "Add an AI agent interface (context, tools, next steps, guarded runs) a",
+      "테스트·예제·실험": 332,
+      "엔진": 543
+    },
+    {
+      "chapter": 26,
+      "commit": "5ed1335",
+      "subject": "Add an MCP server (stdio and Streamable HTTP) with per-token tools, DB",
+      "테스트·예제·실험": 387,
+      "엔진": 409
+    },
+    {
+      "chapter": 27,
+      "commit": "296ae55",
+      "subject": "Add a LangGraph workflow for filing-delay-risk customers to MiniOnto: ",
+      "테스트·예제·실험": 295,
+      "엔진": 511
+    },
+    {
+      "chapter": 27,
+      "commit": "8d8f453",
+      "subject": "Fix the recursion limit note: LangGraph's default is 10,007 since 1.1.",
+      "엔진": 3
+    },
+    {
+      "chapter": 27,
+      "commit": "7ecb4c1",
+      "subject": "Fix the workflow crashing on tax returns without document rows (empty ",
+      "엔진": 4,
+      "테스트·예제·실험": 8
+    },
+    {
+      "chapter": 28,
+      "commit": "910cd0b",
+      "subject": "Add the ch.28 agent comparison experiment: SQL, plain tools, ontology ",
+      "테스트·예제·실험": 981
+    },
+    {
+      "chapter": 28,
+      "commit": "ca10647",
+      "subject": "Note the agent tool limits found in the ch.28 experiment (completion h"
+    },
+    {
+      "chapter": 29,
+      "commit": "1163f65",
+      "subject": "Add OWL ↔ MiniOnto mapping: mapping file, checks (coverage, types, car",
+      "엔진": 520,
+      "도메인": 286,
+      "테스트·예제·실험": 106
+    },
+    {
+      "chapter": 30,
+      "commit": "860ded8",
+      "subject": "Use OWL-RL inference in operations: CustomerSegment (taxos 0.7.0) set ",
+      "엔진": 205,
+      "도메인": 316,
+      "테스트·예제·실험": 103
+    },
+    {
+      "chapter": 30,
+      "commit": "ad20f47",
+      "subject": "Note that a none() precondition also holds when no rows exist (tax ret"
+    },
+    {
+      "chapter": 31,
+      "commit": "15d983e",
+      "subject": "Add the ch.31 approach comparison: plain DB/API, RDF/OWL, operational ",
+      "테스트·예제·실험": 803
+    },
+    {
+      "chapter": 32,
+      "commit": "b01b418",
+      "subject": "Northwind purchasing (ch.32): purchase orders, sale/purchase/receive/c",
+      "엔진": 26,
+      "도메인": 529,
+      "테스트·예제·실험": 105
+    },
+    {
+      "chapter": 33,
+      "commit": "1927ab2",
+      "subject": "Tax OS v0.8.0 (ch.33): customer inquiries with answer/escalate Actions",
+      "테스트·예제·실험": 51,
+      "도메인": 448
+    },
+    {
+      "chapter": 34,
+      "commit": "d34b7f0",
+      "subject": "Tax OS consult agent and daily automation (ch.34): sample inquiries, k",
+      "도메인": 524,
+      "테스트·예제·실험": 58
+    },
+    {
+      "chapter": 35,
+      "commit": "834c637",
+      "subject": "Add a third domain (ch.35, phase 1): plant maintenance defined only by",
+      "도메인": 367,
+      "테스트·예제·실험": 411
+    },
+    {
+      "chapter": 35,
+      "commit": "e99194f",
+      "subject": "Engine changes found by the third domain (ch.35, phase 2): actor_profi",
+      "엔진": 101,
+      "도메인": 18,
+      "테스트·예제·실험": 351
+    },
+    {
+      "chapter": 35,
+      "commit": "84dfe82",
+      "subject": "Neutral examples in metamodel field descriptions (ch.35)",
+      "엔진": 6
+    }
+  ]
+}
